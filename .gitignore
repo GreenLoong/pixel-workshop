@@ -1,0 +1,31 @@
+# Qt Creator local settings
+*.user
+*.user.*
+.qtcreator/
+
+# CMake and build output
+build/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+compile_commands.json
+*.ninja
+.ninja_*
+.qtc_clangd/
+.qt/
+
+# Compiled files
+*.obj
+*.o
+*.exe
+*.dll
+*.lib
+*.pdb
+*.ilk
+
+# Editor and operating-system files
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
