@@ -18,6 +18,8 @@ public:
     ~MainWindow() override;
 
 private:
+    void openImage();
+
     Ui::MainWindow *ui;
 };
 #endif // MAINWINDOW_H
