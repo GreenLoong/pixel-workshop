@@ -1,6 +1,12 @@
 cmake_minimum_required(VERSION 3.19)
 project(ImageBatchTool LANGUAGES CXX)
 
+# Work around a locally reproduced CMake crash when Qt reads the cached
+# windeployqt path on reconfigure. Let Qt locate the deployment tool again.
+if(WIN32)
+    unset(WINDEPLOYQT_EXECUTABLE CACHE)
+endif()
+
 find_package(Qt6 6.5 REQUIRED COMPONENTS Core Widgets)
 #core:cv::Mat 等基础数据结构。
 #imgproc：灰度转换、缩放等图像处理。
@@ -17,6 +23,8 @@ qt_add_executable(ImageBatchTool
     mainwindow.cpp
     mainwindow.h
     mainwindow.ui
+    imageprocessor.h
+    imageprocessor.cpp
 )
 
 target_include_directories(ImageBatchTool PRIVATE

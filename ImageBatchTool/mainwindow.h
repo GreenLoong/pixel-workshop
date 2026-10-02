@@ -2,6 +2,7 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
+#include <QPixmap>
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -17,9 +18,21 @@ public:
     explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow() override;
 
+protected:
+    bool eventFilter(QObject *watched, QEvent *event) override;
+
 private:
     void openImage();
+    void updatePreview();
+    void converToGrayscale();
+    void restoreOriginal();
+    void saveImage();
 
     Ui::MainWindow *ui;
+
+    QPixmap originalImage;  //打开时原图
+    QPixmap currentImage;   //当前处理图
+
+
 };
 #endif // MAINWINDOW_H
