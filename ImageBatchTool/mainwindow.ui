@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>420</width>
-    <height>370</height>
+    <height>404</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -82,6 +82,13 @@
     </item>
     <item>
      <layout class="QHBoxLayout" name="horizontalLayout">
+      <item>
+       <widget class="QPushButton" name="resizeButton">
+        <property name="text">
+         <string>调整大小</string>
+        </property>
+       </widget>
+      </item>
       <item>
        <widget class="QPushButton" name="grayscaleButton">
         <property name="text">

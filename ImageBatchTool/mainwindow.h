@@ -3,6 +3,7 @@
 
 #include <QMainWindow>
 #include <QPixmap>
+#include <QSize>
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -27,11 +28,15 @@ private:
     void converToGrayscale();
     void restoreOriginal();
     void saveImage();
+    void showResizeDialog();
+    bool applyProcessing(bool grayscale, const QSize &targetSize);
 
     Ui::MainWindow *ui;
 
     QPixmap originalImage;  //打开时原图
     QPixmap currentImage;   //当前处理图
+
+    bool grayscaleEnabled = false;
 
 
 };

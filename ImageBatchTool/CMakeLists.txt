@@ -1,4 +1,6 @@
 cmake_minimum_required(VERSION 3.19)
+
+set(CMAKE_USER_MAKE_RULES_OVERRIDE_CXX "${CMAKE_CURRENT_SOURCE_DIR}/cmake/MSVCDependencies.cmake")
 project(ImageBatchTool LANGUAGES CXX)
 
 # Work around a locally reproduced CMake crash when Qt reads the cached
@@ -25,6 +27,7 @@ qt_add_executable(ImageBatchTool
     mainwindow.ui
     imageprocessor.h
     imageprocessor.cpp
+    resizedialog.h resizedialog.cpp resizedialog.ui
 )
 
 target_include_directories(ImageBatchTool PRIVATE
