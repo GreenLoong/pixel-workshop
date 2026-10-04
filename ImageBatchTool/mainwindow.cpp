@@ -19,6 +19,8 @@
 #include <QStandardPaths>
 #include <QFileInfo>
 #include <QImage>
+#include <QImageReader>
+#include <QIcon>
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
@@ -210,6 +212,13 @@ MainWindow::MainWindow(QWidget *parent)
     updateWindowFrame();
 
     setupMenus();
+    auto *brand=new QWidget(this);
+    auto *brandLayout=new QHBoxLayout(brand);brandLayout->setContentsMargins(0,0,0,0);brandLayout->setSpacing(10);
+    auto *appIcon=new QLabel(brand);appIcon->setObjectName("appIconLabel");
+    appIcon->setFixedSize(44,44);appIcon->setPixmap(QIcon(":/app/icon.png").pixmap(44,44));
+    const int titleIndex=ui->sidebarLayout->indexOf(ui->appTitleLabel);
+    ui->sidebarLayout->removeWidget(ui->appTitleLabel);
+    brandLayout->addWidget(appIcon);brandLayout->addWidget(ui->appTitleLabel,1);ui->sidebarLayout->insertWidget(titleIndex,brand);
     auto *editButton=new QToolButton(this);
     editButton->setObjectName("editImageButton");editButton->setText("编辑图片");
     editButton->setMenu(findChild<QMenu *>("editMenu"));editButton->setPopupMode(QToolButton::InstantPopup);
@@ -572,8 +581,9 @@ void MainWindow::openImage()
     qInfo() << "选中的图片:" << filePath;
 
     // 先读取到临时对象，确认成功后再更新界面
-    QPixmap image;
-    if (!image.load(filePath))
+    QImageReader reader(filePath);reader.setAutoTransform(true);
+    const QPixmap image=QPixmap::fromImage(reader.read());
+    if (image.isNull())
     {
         QMessageBox::warning(this, "打开失败", "无法读取这张图片,检查文件是否损坏或者格式是否受支持");
         return;
