@@ -1,6 +1,6 @@
 // PPHumanSeg inference adapted from OpenCV Zoo's pphumanseg.py.
 // Copyright (C) 2021, Shenzhen Institute of Artificial Intelligence and Robotics for Society.
-// Copyright (c) 2021 PaddlePaddle Authors. Apache-2.0; see models/PPHumanSeg-LICENSE.txt.
+// Copyright (c) 2021 PaddlePaddle Authors. Apache-2.0; see resources/models/PPHumanSeg-LICENSE.txt.
 // Changes: C++ RGB input, per-thread model reuse, full-size probability comparison.
 #include "domain/humansegmentation.h"
 #include <opencv2/dnn.hpp>

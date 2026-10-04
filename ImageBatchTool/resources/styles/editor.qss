@@ -1,0 +1,11 @@
+QWidget#editorPage { background:#f2f3f5; }
+        QWidget#contentPanel { background:transparent; }
+        QPushButton[modeButton="true"] { border:0; border-radius:7px; background:transparent; padding:8px 14px; }
+        QPushButton[modeButton="true"]:hover { background:#e4e9f0; }
+        QPushButton[modeButton="true"]:checked { background:#e0e9ff; color:#2458d6; }
+        QScrollArea { background:white; border:1px solid #e2e6ed; border-radius:10px; }
+        QScrollArea > QWidget > QWidget { background:white; }
+        QScrollBar:vertical { width:8px; background:#f5f6f8; }
+        QScrollBar::handle:vertical { background:#ccd3df; border-radius:4px; min-height:30px; }
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }
+        QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background:transparent; }

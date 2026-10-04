@@ -1,6 +1,7 @@
 #include "presentation/dialogs/resizedialog.h"
 #include "ui_resizedialog.h"
 #include "presentation/widgets/dialogappearance.h"
+#include "domain/imageprocessor.h"
 
 #include <QCheckBox>
 #include <QDialogButtonBox>
@@ -20,11 +21,14 @@
 #include <cmath>
 #include <limits>
 
+namespace {
 int toPixelCount(double value)
 {
     const double limited = std::clamp(value, 1.0, static_cast<double>(std::numeric_limits<int>::max()));
     return static_cast<int>(std::llround(limited));
 }
+
+} // namespace
 
 ResizeDialog::ResizeDialog(const QSize &originalSize, const QSize &currentSize, QWidget *parent)
     : QDialog(parent), ui(new Ui::ResizeDialog), originalSize_(originalSize),
@@ -32,7 +36,9 @@ ResizeDialog::ResizeDialog(const QSize &originalSize, const QSize &currentSize, 
 {
     ui->setupUi(this);
 
-    setupFramelessWindow();
+    ui->rootLayout->setContentsMargins(12,12,12,12);
+    DialogAppearance::setup(this,{ui->headerPanel,ui->dialogHeading,ui->dialogSubtitle});
+    ui->closeButton->setCursor(Qt::ArrowCursor);
     ui->closeButton->setText(QString());
     ui->closeButton->setIcon(QIcon(":/indicators/close.svg"));
     ui->closeButton->setIconSize(QSize(14, 14));
@@ -142,14 +148,6 @@ void ResizeDialog::embedInEditor()
     ui->contentLayout->setContentsMargins(10,12,10,12);
 }
 
-// 去掉系统标题栏，窗口外观完全由样式表决定。
-void ResizeDialog::setupFramelessWindow()
-{
-    ui->rootLayout->setContentsMargins(12, 12, 12, 12);
-    DialogAppearance::setup(this, {ui->headerPanel, ui->dialogHeading, ui->dialogSubtitle});
-    ui->closeButton->setCursor(Qt::ArrowCursor);
-}
-
 QSize ResizeDialog::targetSize() const
 {
     return QSize(ui->widthSpinBox->value(), ui->heightSpinBox->value());
@@ -225,10 +223,7 @@ void ResizeDialog::updateSummary()
 {
     const QSize size = targetSize();
 
-    const qint64 pixels = static_cast<qint64>(size.width()) * size.height();
-
-    // 第一版暂定最多输出 4000 万像素。
-    const bool allowed = pixels <= 40000000;
+    const bool allowed=ImageProcessor::validOutputSize(cv::Size(size.width(),size.height()));
 
     const QString sizeText = QString("目标尺寸：%1 × %2 px").arg(size.width()).arg(size.height());
 

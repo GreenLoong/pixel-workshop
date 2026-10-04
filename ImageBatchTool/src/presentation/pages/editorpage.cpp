@@ -6,6 +6,8 @@
 #include "presentation/widgets/dialogappearance.h"
 #include "application/imageprocessing.h"
 #include "presentation/widgets/selectionitem.h"
+#include "presentation/widgets/brushpreview.h"
+#include "presentation/widgets/previewimage.h"
 #include <QAbstractButton>
 #include <QButtonGroup>
 #include <QDialogButtonBox>
@@ -19,7 +21,6 @@
 #include <QSlider>
 #include <QSpinBox>
 #include <QComboBox>
-#include <QSignalBlocker>
 #include <QVBoxLayout>
 #include <QShortcut>
 #include <exception>
@@ -28,20 +29,12 @@ EditorPage::EditorPage(QWidget *parent):QWidget(parent),host_(new QWidget(this))
     body_(new QVBoxLayout(host_)),preview_(new BrushPreview(this)),modes_(new QButtonGroup(this))
 {
     setObjectName("editorPage");
-    QFile sheet(":/styles/dialog.qss");
-    if(sheet.open(QIODevice::ReadOnly))setStyleSheet(QString::fromUtf8(sheet.readAll())+QStringLiteral(R"(
-        QWidget#editorPage { background:#f2f3f5; }
-        QWidget#contentPanel { background:transparent; }
-        QPushButton[modeButton="true"] { border:0; border-radius:7px; background:transparent; padding:8px 14px; }
-        QPushButton[modeButton="true"]:hover { background:#e4e9f0; }
-        QPushButton[modeButton="true"]:checked { background:#e0e9ff; color:#2458d6; }
-        QScrollArea { background:white; border:1px solid #e2e6ed; border-radius:10px; }
-        QScrollArea > QWidget > QWidget { background:white; }
-        QScrollBar:vertical { width:8px; background:#f5f6f8; }
-        QScrollBar::handle:vertical { background:#ccd3df; border-radius:4px; min-height:30px; }
-        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }
-        QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background:transparent; }
-    )"));
+    QString theme;
+    for(const char *path:{":/styles/dialog.qss",":/styles/editor.qss"}) {
+        QFile sheet(path);
+        if(sheet.open(QIODevice::ReadOnly))theme+=QString::fromUtf8(sheet.readAll());
+    }
+    setStyleSheet(theme);
     auto *root=new QVBoxLayout(this);root->setContentsMargins(20,10,20,16);root->setSpacing(14);
     auto *top=new QHBoxLayout;root->addLayout(top);
     name_=new QLabel(this);name_->setObjectName("editorFileName");top->addWidget(name_,1);
@@ -184,17 +177,15 @@ void EditorPage::buildPanel(bool reusePreview)
         // 尺寸只需要几何结果；跳过分割和调色，避免在切页时重复昂贵处理。
         if(draft_.targetSize!=cv::Size())current=QSize(draft_.targetSize.width,draft_.targetSize.height);
         else {
-            cv::Mat dimensions(original_.height(),original_.width(),CV_8UC1,cv::Scalar(0));
-            const auto transformed=ImageProcessor::transformGeometry(dimensions,draft_);
-            current=QSize(transformed.cols,transformed.rows);
+            const auto size=ImageProcessor::geometrySize(cv::Size(original_.width(),original_.height()),draft_);
+            current=QSize(size.width,size.height);
         }
         auto *resize=new ResizeDialog(original_.size(),current,host_);panel_=resize;
         panel_->setProperty("entrySize",current);resize->embedInEditor();
-        auto source=original_.width()>1280 || original_.height()>1280
-            ?original_.scaled(1280,1280,Qt::KeepAspectRatio,Qt::SmoothTransformation):original_;
+        auto source=PreviewImage::thumbnail(original_);
         const auto refresh=[this,resize,source] {
             if(!valid())return;
-            auto opt=draft_;const auto size=resize->targetSize().scaled(1280,1280,Qt::KeepAspectRatio).boundedTo(resize->targetSize());
+            auto opt=draft_;const auto size=PreviewImage::boundedSize(resize->targetSize());
             opt.targetSize=cv::Size(size.width(),size.height());
             try{preview_->setImage(QPixmap::fromImage(ImageProcessing::processImage(source,opt)));}
             catch(const std::exception &e){preview_->setToolTip(QString::fromUtf8(e.what()));}

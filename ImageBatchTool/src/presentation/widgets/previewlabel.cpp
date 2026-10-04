@@ -63,11 +63,6 @@ int PreviewLabel::zoomPercent() const
     return static_cast<int>(std::lround(scale_ * 100));
 }
 
-QSizeF PreviewLabel::displayedImageSize() const
-{
-    return imageItem_->boundingRect().size() * scale_;
-}
-
 void PreviewLabel::applyZoom(double scale)
 {
     if (imageItem_->pixmap().isNull())

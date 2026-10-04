@@ -23,7 +23,6 @@ public:
 private:
     void updatePreview();
     QImage basePreview_;
-    ImageProcessor::Options initial_;
     ImageProcessor::Options working_;
     PreviewLabel *preview_;
     QSpinBox *brightness_;

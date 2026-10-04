@@ -18,6 +18,7 @@ qt_standard_project_setup()
 # 源文件只在所属模块列举一次，应用和测试链接同一实现。
 add_library(pixel_domain STATIC
     src/domain/imageprocessor.cpp src/domain/imageprocessor.h
+    src/domain/geometryprocessor.cpp
     src/domain/backgroundprocessor.cpp
     src/domain/humansegmentation.cpp src/domain/humansegmentation.h)
 set_target_properties(pixel_domain PROPERTIES AUTOMOC OFF AUTOUIC OFF)
@@ -25,11 +26,14 @@ target_include_directories(pixel_domain PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src"
 target_link_libraries(pixel_domain PUBLIC ${OpenCV_LIBS})
 
 add_library(pixel_infrastructure STATIC
-    src/infrastructure/imagefiles.cpp src/infrastructure/imagefiles.h)
+    src/infrastructure/imagefiles.cpp src/infrastructure/imagefiles.h
+    src/infrastructure/imageconversion.cpp src/infrastructure/imageconversion.h
+    src/infrastructure/modelresources.cpp src/infrastructure/modelresources.h)
 target_link_libraries(pixel_infrastructure PUBLIC pixel_domain Qt::Gui)
 add_library(pixel_application STATIC
     src/application/imageprocessing.cpp src/application/imageprocessing.h
-    src/application/batchjob.cpp src/application/batchjob.h)
+    src/application/batchjob.cpp src/application/batchjob.h
+    src/application/backgroundpreview.cpp src/application/backgroundpreview.h)
 target_link_libraries(pixel_application PUBLIC pixel_infrastructure)
 add_library(pixel_presentation STATIC
     src/presentation/windows/mainwindow.cpp src/presentation/windows/mainwindow.h src/presentation/windows/mainwindow.ui
@@ -42,7 +46,9 @@ add_library(pixel_presentation STATIC
     src/presentation/widgets/dialogappearance.cpp src/presentation/widgets/dialogappearance.h
     src/presentation/widgets/previewlabel.cpp src/presentation/widgets/previewlabel.h
     src/presentation/widgets/selectionitem.cpp src/presentation/widgets/selectionitem.h
-    src/presentation/widgets/sliderstyle.h)
+    src/presentation/widgets/sliderstyle.h src/presentation/widgets/previewimage.h
+    src/presentation/widgets/brushpreview.cpp src/presentation/widgets/brushpreview.h
+    src/presentation/widgets/zoomcontrols.cpp src/presentation/widgets/zoomcontrols.h)
 target_link_libraries(pixel_presentation PUBLIC pixel_application Qt::Widgets Qt::Svg Qt::Concurrent)
 
 # 对象库确保资源注册代码进入每个可执行文件，不被静态链接器裁掉。
@@ -80,7 +86,9 @@ if(IMAGEBATCHTOOL_BUILD_TESTS)
     target_link_libraries(batch_tests PRIVATE pixel_application pixel_resources Qt::Widgets)
     qt_add_executable(segmentation_tests tests/segmentation_tests.cpp)
     target_link_libraries(segmentation_tests PRIVATE pixel_application pixel_resources)
-    foreach(test IN ITEMS imageprocessor_tests dialog_interaction_tests batch_tests segmentation_tests)
+    qt_add_executable(imageconversion_tests tests/imageconversion_tests.cpp)
+    target_link_libraries(imageconversion_tests PRIVATE pixel_infrastructure)
+    foreach(test IN ITEMS imageprocessor_tests dialog_interaction_tests batch_tests segmentation_tests imageconversion_tests)
         if(MSVC)
             target_compile_options(${test} PRIVATE /utf-8)
         endif()

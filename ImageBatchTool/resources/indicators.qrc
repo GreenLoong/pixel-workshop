@@ -13,6 +13,8 @@
  </qresource>
  <qresource prefix="/styles">
   <file alias="dialog.qss">styles/dialog.qss</file>
+  <file alias="mainwindow.qss">styles/mainwindow.qss</file>
+  <file alias="editor.qss">styles/editor.qss</file>
  </qresource>
  <qresource prefix="/app">
   <file alias="icon.png">icons/app-icon.png</file>

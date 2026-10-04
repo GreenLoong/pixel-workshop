@@ -153,6 +153,19 @@ int main()
         cv::Mat tiny(2,2,CV_8UC3,cv::Scalar(10,20,30));
         require(ImageProcessor::process(tiny,background).at<cv::Vec4b>(1,1)[3]==255,"Tiny image cannot use manual mask fallback");
         std::cout<<"PASS: full/tiny selections, all-class strokes, floating bounds and automatic segmentation recovery\n";
+        // 尺寸查询必须与实际旋转、翻转和裁剪的像素范围一致。
+        cv::Mat geometryFixture(31,47,CV_8UC3,cv::Scalar(20,40,60));
+        for(double angle:{-180.0,-90.0,-37.5,0.0,22.5,90.0,180.0}) {
+            for(auto crop:{cv::Rect2d(),cv::Rect2d(.13,.17,.51,.62),cv::Rect2d(.98,.98,.02,.02)}) {
+                ImageProcessor::Options query;query.rotation=angle;query.crop=crop;query.flipHorizontal=true;
+                require(ImageProcessor::geometrySize(geometryFixture.size(),query)
+                    ==ImageProcessor::transformGeometry(geometryFixture,query).size(),
+                    "Geometry-only size disagrees with rendered output");
+            }
+        }
+        require(ImageProcessor::validOutputSize(cv::Size(8000,5000))
+            && !ImageProcessor::validOutputSize(cv::Size(8001,5000)),"Output limit boundary changed");
+        std::cout<<"PASS: geometry dimensions match rendered crop and rotation; output limit boundaries\n";
     } catch (const std::exception &error) {
         std::cerr << error.what() << '\n';
         return 1;

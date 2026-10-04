@@ -1,6 +1,7 @@
 #include "presentation/dialogs/tonedialog.h"
 #include "presentation/widgets/dialogappearance.h"
 #include "application/imageprocessing.h"
+#include "presentation/widgets/previewimage.h"
 #include "presentation/widgets/previewlabel.h"
 #include "presentation/widgets/sliderstyle.h"
 #include <QDialogButtonBox>
@@ -19,7 +20,7 @@
 #include <QCheckBox>
 
 ToneDialog::ToneDialog(const QImage &original,const ImageProcessor::Options &options,QWidget *parent,PreviewLabel *sharedPreview)
-    : QDialog(parent),initial_(options),working_(options),preview_(sharedPreview?sharedPreview:new PreviewLabel(this)),
+    : QDialog(parent),working_(options),preview_(sharedPreview?sharedPreview:new PreviewLabel(this)),
       brightness_(new QSpinBox(this)),contrast_(new QDoubleSpinBox(this)),
       buttons_(new QDialogButtonBox(QDialogButtonBox::Ok|QDialogButtonBox::Cancel,this)),
       error_(new QLabel(this))
@@ -120,14 +121,12 @@ ToneDialog::ToneDialog(const QImage &original,const ImageProcessor::Options &opt
     });
     try {
         const QSize actual=options.targetSize==cv::Size()?original.size():QSize(options.targetSize.width,options.targetSize.height);
-        const QSize small=actual.scaled(1280,1280,Qt::KeepAspectRatio).boundedTo(actual);
+        const QSize small=PreviewImage::boundedSize(actual);
         auto base=options; base.clearTone(); base.grayscale=false;
         base.targetSize=options.targetSize==cv::Size()?cv::Size():cv::Size(small.width(),small.height());
-        const QImage source=original.width()>1280||original.height()>1280
-            ?original.scaled(1280,1280,Qt::KeepAspectRatio,Qt::SmoothTransformation):original;
+        const QImage source=PreviewImage::thumbnail(original);
         basePreview_=ImageProcessing::processImage(source,base);
-        if(basePreview_.width()>1280 || basePreview_.height()>1280)
-            basePreview_=basePreview_.scaled(1280,1280,Qt::KeepAspectRatio,Qt::SmoothTransformation);
+        basePreview_=PreviewImage::thumbnail(basePreview_);
         updatePreview();
     } catch(const std::exception &e) {
         error_->setText("预览失败："+QString::fromUtf8(e.what()));error_->show();
@@ -141,7 +140,7 @@ void ToneDialog::updatePreview()
     try {
         auto tone=working_; tone.rotation=0; tone.flipHorizontal=tone.flipVertical=false; tone.crop={};tone.targetSize={};
         tone.background=ImageProcessor::BackgroundMode::None; // 基础预览已应用背景。
-        // 基础预览包含灰度状态，扩展色彩处理之后仍保持灰度。
+        // 基础缓存为中性 RGB；颜色调整之后再应用草稿中的灰度选项。
         preview_->setImage(QPixmap::fromImage(ImageProcessing::processImage(basePreview_,tone)));
         error_->hide();buttons_->button(QDialogButtonBox::Ok)->setEnabled(true);
     } catch(const std::exception &e) {

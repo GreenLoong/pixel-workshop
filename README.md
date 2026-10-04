@@ -31,9 +31,15 @@
 
 在 Qt Creator 打开 `ImageBatchTool/CMakeLists.txt`，选择 MSVC 64 位 Kit，为 CMake 配置 `OpenCV_DIR` 指向安装目录内含 `OpenCVConfig.cmake` 的文件夹。具体步骤见[环境配置文档](docs/环境配置.md)。
 
-构建测试时启用 `IMAGEBATCHTOOL_BUILD_TESTS=ON`，构建后运行 CTest。OpenCV DLL 所在目录需要位于测试进程的 PATH。四项检查覆盖处理算法、参数对话框与预览交互、后台批量任务和人像模型推理。真实鼠标、触控板和不同电脑上的运行仍需手动验收。
+构建测试时启用 `IMAGEBATCHTOOL_BUILD_TESTS=ON`，构建后运行 CTest。OpenCV DLL 所在目录需要位于测试进程的 PATH。五项检查覆盖处理算法、参数对话框与预览交互、后台批量任务、人像模型推理和图像内存适配。真实鼠标、触控板和不同电脑上的运行仍需手动验收。
 
 Windows 分发方法见[Windows 构建与交付](docs/Windows构建与交付.md)。
+
+## 源码组织
+
+源码位于 `ImageBatchTool/src`：`domain` 管理 OpenCV 算法与参数，`infrastructure` 管理文件、模型及格式适配，`application` 管理处理流程和后台任务，`presentation` 管理窗口、页面、对话框和控件。图标、样式与模型位于 `ImageBatchTool/resources`。CMake 为四层建立模块目标，程序和测试复用同一实现。
+
+完整目录、重构清单和关键代码见[项目分层与重构清单](docs/项目分层与重构清单.md)。
 
 ## 项目文档
 

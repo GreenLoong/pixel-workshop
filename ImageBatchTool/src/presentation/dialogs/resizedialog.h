@@ -25,8 +25,6 @@ signals:
     void targetSizeChanged(QSize size);
 
 private:
-    void setupFramelessWindow();
-
     void updateMode();
     void updateFromPercent();
     void updateFromWidth();

@@ -8,6 +8,11 @@
 
 namespace ImageProcessor
 {
+inline constexpr long long MaxOutputPixels=40000000;
+inline bool validOutputSize(cv::Size size)
+{
+    return size.width>0 && size.height>0 && static_cast<long long>(size.width)*size.height<=MaxOutputPixels;
+}
 enum class BackgroundMode { None, Blur, Remove, Replace };
 enum class SegmentationMethod { Human, Region };
 struct BrushStroke {
@@ -70,6 +75,8 @@ struct Options
 // 输入为 8 位 RGB 或 RGBA；结果拥有独立的数据，不修改输入。
 cv::Mat process(const cv::Mat &rgb, const Options &options);
 cv::Mat transformGeometry(const cv::Mat &source, const Options &options);
+// 与实际几何处理共用旋转画布和裁剪舍入规则，不分配图片内存。
+cv::Size geometrySize(cv::Size original,const Options &options);
 cv::Mat adjustColor(const cv::Mat &rgb, const Options &options);
 cv::Mat processBackground(const cv::Mat &source, const Options &options);
 struct RegionSamples {
@@ -82,7 +89,6 @@ cv::Mat adjustTone(const cv::Mat &source, int brightness, double contrast);
 // 输入：8 位、三通道 RGB 图片。
 // 输出：同尺寸的8位、单通道灰度图片。
 cv::Mat toGrayscale(const cv::Mat &rgb);
-cv::Mat resizeByPercent(const cv::Mat &source, int percent);
 cv::Mat resizeToSize(const cv::Mat &source, cv::Size target);
 }
 

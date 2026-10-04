@@ -3,16 +3,13 @@
 #include "application/imageprocessing.h"
 #include "presentation/pages/editorpage.h"
 #include <QStackedWidget>
-#include "presentation/dialogs/tonedialog.h"
-#include "presentation/dialogs/geometrydialog.h"
-#include "presentation/dialogs/backgrounddialog.h"
 #include "presentation/dialogs/batchdialog.h"
 #include "infrastructure/imagefiles.h"
-#include "presentation/widgets/sliderstyle.h"
+#include "presentation/widgets/zoomcontrols.h"
+#include <QFile>
 #include <exception>
 #include <stdexcept>
 #include "presentation/widgets/previewlabel.h"
-#include "presentation/dialogs/resizedialog.h"
 
 #include <QDebug>
 #include <QFileDialog>
@@ -30,15 +27,9 @@
 #include <QPushButton>
 #include <QSizePolicy>
 #include <QStatusBar>
-#include <QComboBox>
 #include <QHBoxLayout>
-#include <QSignalBlocker>
-#include <QSlider>
 #include <QToolButton>
-#include <QStyledItemDelegate>
 #include <QFrame>
-#include <QLineEdit>
-#include <QRegularExpressionValidator>
 #include <QShortcut>
 #include <QMouseEvent>
 #include <QWindow>
@@ -48,8 +39,6 @@
 #include <QUndoStack>
 #include <QUndoCommand>
 #include <functional>
-
-
 
 namespace
 {
@@ -66,131 +55,6 @@ private:
     std::function<void(const ImageProcessor::Options &)> apply_;
     bool first_=true;
 };
-
-// 主界面配色与样式。所有颜色集中在这里，方便统一调整。
-const char *const kThemeStyleSheet = R"(
-QMainWindow#MainWindow { background: transparent; }
-QWidget#sidebar {
-    background: #ffffff;
-    border-left: 1px solid #e3e6ec;
-}
-QWidget#previewPanel { background: #f2f3f5; }
-QGraphicsView#imageLabel {
-    background: #ffffff;
-    border: 1px solid #e3e6ec;
-    border-radius: 12px;
-    qproperty-cornerRadius: 12;
-    color: #98a1ae;
-    font-size: 13px;
-}
-QLabel#appTitleLabel {
-    color: #101828;
-    font-size: 20px;
-    font-weight: 600;
-}
-QLabel#appSubtitleLabel {
-    color: #8a93a2;
-    font-size: 12px;
-}
-QLabel#editSectionLabel {
-    color: #8a93a2;
-    font-size: 12px;
-    font-weight: 600;
-    padding-top: 6px;
-}
-QLabel#imageInfoLabel {
-    color: #475467;
-    font-size: 12px;
-    background: #f7f8fa;
-    border: 1px solid #eaecf0;
-    border-radius: 8px;
-    padding: 10px 12px;
-}
-QPushButton {
-    background: #ffffff;
-    border: 1px solid #d7dce4;
-    border-radius: 8px;
-    padding: 8px 14px;
-    color: #344054;
-    font-size: 13px;
-}
-QPushButton:hover { background: #f5f7fa; border-color: #b9c1cd; }
-QPushButton:pressed { background: #eceff3; }
-QPushButton:disabled { background: #f7f8fa; color: #b3b8c2; border-color: #e6e8ec; }
-QPushButton#openImageButton {
-    background: #2f6bff;
-    border-color: #2f6bff;
-    color: #ffffff;
-    font-weight: 600;
-}
-QPushButton#openImageButton:hover { background: #4a7dff; border-color: #4a7dff; }
-QPushButton#openImageButton:pressed { background: #2559dc; border-color: #2559dc; }
-QPushButton#openImageButton:disabled { background: #c8d5f7; border-color: #c8d5f7; color: #ffffff; }
-QLabel#shortcutHintLabel { color: #98a1ae; font-size: 12px; }
-QStatusBar { background: #ffffff; border-top: 1px solid #e3e6ec; border-bottom-left-radius: 12px; border-bottom-right-radius: 12px; color: #667085; }
-QStatusBar::item { border: none; }
-QWidget#zoomControls { background: transparent; }
-QToolButton { background: transparent; border: none; border-radius: 6px; padding: 4px; color: #475467; }
-QToolButton:hover { background: #eef2ff; color: #2f6bff; }
-QToolButton:pressed { background: #dce7ff; }
-QToolButton:disabled { color: #b3b8c2; }
-QToolButton#editImageButton { background: #eef2ff; border: 1px solid #d8e2ff; color: #2f6bff; padding: 8px 14px; }
-QToolButton#editImageButton:hover { background: #e0e9ff; border-color: #b6caff; }
-QToolButton#editImageButton:disabled { background: #f7f8fa; color: #b3b8c2; border-color: #e6e8ec; }
-QToolButton#editImageButton::menu-indicator { image: url(:/indicators/chevron-down.svg); width: 12px; height: 12px; subcontrol-position: right center; right: 12px; }
-QToolButton#closeWindowButton:hover { background: #e5484d; }
-QToolButton#closeWindowButton:pressed { background: #fde2e4; }
-QComboBox#zoomPercent {
-    background: #e9edf3;
-    border: 1px solid #dce2ea;
-    border-radius: 8px;
-    padding: 4px 28px 4px 10px;
-    min-height: 20px;
-    color: #344054;
-    font-size: 12px;
-}
-QComboBox#zoomPercent:hover { background: #dfe6f0; border-color: #bcc9dc; }
-QComboBox#zoomPercent:focus, QComboBox#zoomPercent:on { background: #eef2ff; border-color: #a8beff; }
-QComboBox#zoomPercent:disabled { background: #f7f8fa; color: #b3b8c2; }
-QComboBox#zoomPercent QLineEdit { background: transparent; border: none; padding: 0; margin: 0; color: #344054; selection-background-color: #2f6bff; selection-color: white; }
-QComboBox#zoomPercent::drop-down {
-    subcontrol-origin: padding;
-    subcontrol-position: top right;
-    width: 24px;
-    border: none;
-    background: transparent;
-}
-QComboBox#zoomPercent::down-arrow { image: url(:/indicators/chevron-down.svg); width: 12px; height: 12px; }
-QComboBox#zoomPercent QAbstractItemView {
-    background: #ffffff;
-    color: #344054;
-    border: 1px solid #e3e6ec;
-    border-radius: 8px;
-    padding: 4px;
-    outline: none;
-    selection-background-color: #eef2ff;
-    selection-color: #2f6bff;
-}
-QComboBox#zoomPercent QAbstractItemView::item { min-height: 28px; padding: 4px 8px; border-radius: 5px; }
-QComboBox#zoomPercent QAbstractItemView::item:hover { background: #f5f7fa; }
-QComboBox#zoomPercent QAbstractItemView::item:selected { background: #eef2ff; color: #2f6bff; }
-QSlider#zoomSlider::groove:horizontal { height: 4px; background: #d7dce4; border-radius: 2px; }
-QSlider#zoomSlider::sub-page:horizontal { background: #2f6bff; border-radius: 2px; }
-QSlider#zoomSlider::handle:horizontal { background: #2f6bff; border: 3px solid #dce7ff; width: 10px; margin: -6px 0; border-radius: 8px; }
-QMenuBar { background: #ffffff; border-bottom: 1px solid #e3e6ec; border-top-left-radius: 12px; border-top-right-radius: 12px; color: #344054; }
-QMenuBar::item { padding: 6px 12px; background: transparent; }
-QMenuBar::item:selected { background: #eef2ff; color: #2f6bff; border-radius: 6px; }
-QMenu {
-    background: #ffffff;
-    border: 1px solid #e3e6ec;
-    border-radius: 8px;
-    padding: 6px;
-    color: #344054;
-}
-QMenu::item { padding: 7px 26px 7px 14px; border-radius: 6px; }
-QMenu::item:selected { background: #eef2ff; color: #2f6bff; }
-QMenu::separator { height: 1px; background: #eaecf0; margin: 6px 8px; }
-)";
 
 } // namespace
 
@@ -234,8 +98,7 @@ MainWindow::MainWindow(QWidget *parent)
     connect(editButton,&QToolButton::clicked,this,&MainWindow::showEditor);
     editButton->setSizePolicy(QSizePolicy::Expanding,QSizePolicy::Fixed);editButton->setMinimumHeight(40);
     ui->adjustLayout->insertWidget(0,editButton);
-    ui->resizeButton->hide();ui->grayscaleButton->hide();ui->toneButton->hide();
-    ui->restoreButton->hide();ui->editSectionLabel->setText("工作区");
+    ui->editSectionLabel->setText("工作区");
     ui->shortcutHintLabel->setText("Ctrl+O 打开    Ctrl+S 保存\nCtrl+E 编辑    Ctrl+Z 撤销");
     auto *batchButton=new QPushButton("文件夹批量处理",this);batchButton->setObjectName("batchButton");
     ui->adjustLayout->addWidget(batchButton);connect(batchButton,&QPushButton::clicked,this,&MainWindow::showBatchDialog);
@@ -251,14 +114,6 @@ MainWindow::MainWindow(QWidget *parent)
     connect(ui->openImageButton, &QPushButton::clicked, this, &MainWindow::openImage);
     // 另存为
     connect(ui->saveImageButton, &QPushButton::clicked, this, &MainWindow::saveImage);
-    // 调整大小
-    connect(ui->resizeButton, &QPushButton::clicked, this, &MainWindow::showResizeDialog);
-    // 灰度化
-    connect(ui->grayscaleButton, &QPushButton::clicked, this, &MainWindow::converToGrayscale);
-    connect(ui->toneButton, &QPushButton::clicked, this, &MainWindow::showToneDialog);
-    // 恢复原图
-    connect(ui->restoreButton, &QPushButton::clicked, this, &MainWindow::restoreOriginal);
-
     // 信息卡片按最坏情况（4 行：尺寸/格式/文件/状态）锁定高度。
     // 只靠伸缩因子不够：卡片自身变高同样会把下方的“调整”区顶下去。
     {
@@ -281,82 +136,7 @@ MainWindow::~MainWindow()
 
 void MainWindow::setupZoomControls()
 {
-    auto *controls = new QWidget(this);
-    controls->setObjectName("zoomControls");
-    auto *layout = new QHBoxLayout(controls);
-    layout->setContentsMargins(3, 3, 3, 3);
-    layout->setSpacing(8);
-
-    auto *fit = new QToolButton(controls);
-    fit->setObjectName("fitPreviewButton");
-    fit->setText("适应 / 100%");
-    fit->setFixedHeight(30);
-    fit->setToolTip("切换适应窗口与实际大小，并将图片居中");
-    auto *percent = new QComboBox(controls);
-    percent->setObjectName("zoomPercent");
-    percent->setFixedWidth(112);
-    percent->setCursor(Qt::PointingHandCursor);
-    percent->setItemDelegate(new QStyledItemDelegate(percent));
-    percent->setEditable(true);
-    percent->lineEdit()->setTextMargins(0, 0, 0, 0);
-    percent->lineEdit()->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-    percent->setInsertPolicy(QComboBox::NoInsert);
-    percent->setMaxVisibleItems(12);
-    percent->lineEdit()->setValidator(new QRegularExpressionValidator(
-        QRegularExpression("(?:[1-9][0-9]?|[1-7][0-9]{2}|800)%?"), percent));
-    percent->setToolTip("选择或输入 1%～800% 的预览比例");
-    for (int value : {800, 700, 600, 500, 400, 300, 200, 100, 75, 50, 25, 10})
-        percent->addItem(QString("%1%").arg(value), value);
-    percent->setCurrentIndex(percent->findData(100));
-    auto *minus = new QToolButton(controls);
-    minus->setObjectName("zoomOutButton");
-    minus->setText("−");
-    minus->setFixedSize(30,30);
-    minus->setToolTip("缩小预览");
-    auto *slider = new QSlider(Qt::Horizontal, controls);
-    AbsoluteSliderStyle::applyTo(slider);
-    slider->setObjectName("zoomSlider");
-    slider->setRange(1, 800);
-    slider->setValue(100);
-    slider->setFixedWidth(130);
-    slider->setToolTip("预览缩放，1%～800%");
-    auto *plus = new QToolButton(controls);
-    plus->setObjectName("zoomInButton");
-    plus->setText("+");
-    plus->setFixedSize(30,30);
-    plus->setToolTip("放大预览");
-    for (QWidget *widget : QList<QWidget *>{fit, percent, minus, slider, plus})
-        layout->addWidget(widget);
-    statusBar()->addPermanentWidget(controls);
-    controls->setEnabled(false);
-
-    connect(fit, &QToolButton::clicked, ui->imageLabel, &PreviewLabel::toggleFitActual);
-    connect(minus, &QToolButton::clicked, ui->imageLabel, &PreviewLabel::zoomOut);
-    connect(plus, &QToolButton::clicked, ui->imageLabel, &PreviewLabel::zoomIn);
-    connect(slider, &QSlider::valueChanged, ui->imageLabel, &PreviewLabel::setZoomPercent);
-    connect(percent, &QComboBox::activated, this, [this, percent](int index) {
-        ui->imageLabel->setZoomPercent(percent->itemData(index).toInt());
-    });
-    connect(percent->lineEdit(), &QLineEdit::editingFinished, this, [this, percent] {
-        QString text = percent->currentText();
-        text.remove('%');
-        bool valid = false;
-        const int value = text.toInt(&valid);
-        if (valid && value >= 1 && value <= 800)
-            ui->imageLabel->setZoomPercent(value);
-        else
-            percent->setEditText(QString("%1%").arg(ui->imageLabel->zoomPercent()));
-    });
-    connect(ui->imageLabel, &PreviewLabel::imageAvailable, controls, &QWidget::setEnabled);
-    connect(ui->imageLabel, &PreviewLabel::zoomChanged, this, [percent, slider](int value) {
-        const QSignalBlocker sliderBlocker(slider);
-        const QSignalBlocker percentBlocker(percent);
-        slider->setValue(value);
-        // 任意比例显示在输入框中，预设列表始终保持固定。
-        percent->setCurrentIndex(percent->findData(value));
-        percent->setEditText(QString("%1%").arg(value));
-        percent->lineEdit()->setCursorPosition(0);
-    });
+    statusBar()->addPermanentWidget(new ZoomControls(ui->imageLabel,this));
 
     // 单独打开当前图片的全屏预览，主页的缩放和位置保持不变。
     auto *screenControls = new QWidget(this);
@@ -589,7 +369,8 @@ void MainWindow::setupMenus()
 // 应用整体风格
 void MainWindow::applyTheme()
 {
-    setStyleSheet(QString::fromUtf8(kThemeStyleSheet));
+    QFile sheet(":/styles/mainwindow.qss");
+    if(sheet.open(QIODevice::ReadOnly))setStyleSheet(QString::fromUtf8(sheet.readAll()));
 }
 
 // 打开图片
@@ -699,14 +480,7 @@ void MainWindow::updateActionState()
 {
     const bool hasImage = !currentImage.isNull();
 
-    const bool modified = hasImage && !processingOptions_.isIdentity(
-        cv::Size(originalImage.width(), originalImage.height()));
-
     ui->saveImageButton->setEnabled(hasImage);
-    ui->resizeButton->setEnabled(hasImage);
-    ui->grayscaleButton->setEnabled(hasImage && !processingOptions_.grayscale);
-    ui->toneButton->setEnabled(hasImage);
-    ui->restoreButton->setEnabled(hasImage && modified);
     if(auto *edit=findChild<QMenu *>("editMenu"))edit->setEnabled(hasImage);
     findChild<QToolButton *>("editImageButton")->setEnabled(hasImage);
     findChild<QAction *>("grayscaleAction")->setChecked(processingOptions_.grayscale);
@@ -752,10 +526,6 @@ void MainWindow::saveImage()
     // 取消保存
     if (outputPath.isEmpty())
         return;
-
-    // 保证输出文件名以 .png 结尾
-    if (!outputPath.endsWith(".png", Qt::CaseInsensitive))
-        outputPath += ".png";
 
     try {
         outputPath = ImageFiles::saveUniquePng(currentImage.toImage(), outputPath);

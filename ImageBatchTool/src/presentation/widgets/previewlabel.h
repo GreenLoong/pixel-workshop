@@ -17,7 +17,6 @@ public:
     void setImage(const QPixmap &image);
     void setKeepViewOnImageChange(bool keep) { keepViewOnImageChange_=keep; }
     int zoomPercent() const;
-    QSizeF displayedImageSize() const;
     int cornerRadius() const { return cornerRadius_; }
     void setCornerRadius(int radius);
 

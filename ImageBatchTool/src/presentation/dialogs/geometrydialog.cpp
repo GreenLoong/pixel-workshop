@@ -4,6 +4,7 @@
 #include "presentation/widgets/previewlabel.h"
 #include "presentation/widgets/selectionitem.h"
 #include "presentation/widgets/sliderstyle.h"
+#include "presentation/widgets/previewimage.h"
 #include <QComboBox>
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
@@ -20,8 +21,7 @@
 #include <cmath>
 
 GeometryDialog::GeometryDialog(const QImage &original, const ImageProcessor::Options &options, QWidget *parent,PreviewLabel *sharedPreview)
-    : QDialog(parent), previewSource_(original.width()>1280 || original.height()>1280
-        ? original.scaled(1280,1280,Qt::KeepAspectRatio,Qt::SmoothTransformation):original),
+    : QDialog(parent), previewSource_(PreviewImage::thumbnail(original)),
       originalSize_(original.size()), initial_(options), working_(options),
       preview_(sharedPreview?sharedPreview:new PreviewLabel(this)), selection_(new SelectionItem),
       angle_(new QDoubleSpinBox(this)), sizeLabel_(new QLabel(this)),
@@ -114,26 +114,14 @@ void GeometryDialog::updateImage()
 }
 void GeometryDialog::updateSize()
 {
-    const QRectF rect=selection_->selection(), bounds=preview_->sceneRect();
+    const QRectF bounds=preview_->sceneRect();
     if(bounds.isEmpty()) return;
-    QSize full=originalSize_;
-    const double angle=std::abs(working_.rotation);
-    if(angle==90) full.transpose();
-    else if(angle!=0 && angle!=180) {
-        const double r=angle*CV_PI/180;
-        full=QSize(static_cast<int>(std::ceil(originalSize_.width()*std::abs(std::cos(r))
-                                           +originalSize_.height()*std::abs(std::sin(r)))),
-                   static_cast<int>(std::ceil(originalSize_.height()*std::abs(std::cos(r))
-                                           +originalSize_.width()*std::abs(std::sin(r)))));
-    }
-    const int width=static_cast<int>(std::ceil(rect.right()/bounds.width()*full.width()))
-                   -static_cast<int>(std::floor(rect.left()/bounds.width()*full.width()));
-    const int height=static_cast<int>(std::ceil(rect.bottom()/bounds.height()*full.height()))
-                    -static_cast<int>(std::floor(rect.top()/bounds.height()*full.height()));
+    const auto size=ImageProcessor::geometrySize(cv::Size(originalSize_.width(),originalSize_.height()),options());
+    const int width=size.width,height=size.height;
     sizeLabel_->setText(QString(sharedPreview_?"原图：%1 × %2 px\n裁剪目标：%3 × %4 px"
                                             :"原图：%1 × %2 px    裁剪目标：%3 × %4 px")
         .arg(originalSize_.width()).arg(originalSize_.height()).arg(width).arg(height));
-    const bool valid=width>0 && height>0 && static_cast<qint64>(width)*height<=40000000;
+    const bool valid=ImageProcessor::validOutputSize(size);
     buttons_->button(QDialogButtonBox::Ok)->setEnabled(valid);
 }
 ImageProcessor::Options GeometryDialog::options() const

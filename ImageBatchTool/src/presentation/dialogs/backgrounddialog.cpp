@@ -2,6 +2,8 @@
 #include "presentation/widgets/dialogappearance.h"
 #include "presentation/widgets/selectionitem.h"
 #include "application/imageprocessing.h"
+#include "infrastructure/imageconversion.h"
+#include "presentation/widgets/previewimage.h"
 #include "presentation/widgets/sliderstyle.h"
 #include <QtConcurrent>
 #include <QButtonGroup>
@@ -12,13 +14,11 @@
 #include <QGraphicsScene>
 #include <QHBoxLayout>
 #include <QLabel>
-#include <QMouseEvent>
 #include <QPushButton>
 #include <QSlider>
 #include <QToolButton>
 #include <QVBoxLayout>
 #include <QIcon>
-#include <QStandardItemModel>
 #include <QCheckBox>
 #include <QRadioButton>
 #include <QScrollArea>
@@ -26,62 +26,6 @@
 #include <exception>
 #include <QPainter>
 
-BrushPreview::BrushPreview(QWidget *parent):PreviewLabel(parent)
-{
-    setMouseTracking(true);
-    viewport()->setMouseTracking(true);
-}
-void BrushPreview::paintEvent(QPaintEvent *event)
-{
-    PreviewLabel::paintEvent(event);
-    if (!painting || !pointerInside_ || sceneRect().isEmpty()) return;
-    QPainter p(viewport());
-    p.setRenderHint(QPainter::Antialiasing);
-    const double r = radius * std::min(sceneRect().width(),sceneRect().height()) * std::abs(transform().m11());
-    // 在视口上画笔圈，不受系统光标尺寸上限影响，随图片缩放同步变化。
-    p.setPen(QPen(Qt::black,3)); p.setBrush(Qt::NoBrush); p.drawEllipse(QPointF(pointer_),r,r);
-    p.setPen(QPen(Qt::white,1)); p.drawEllipse(QPointF(pointer_),r,r);
-}
-void BrushPreview::leaveEvent(QEvent *event)
-{
-    pointerInside_=false; viewport()->update();
-    PreviewLabel::leaveEvent(event);
-}
-
-void BrushPreview::append(QPoint point) {
-    const QRectF b=sceneRect();
-    const QPointF p=mapToScene(point);
-    if(!b.contains(p))return;
-    stroke_.points.emplace_back((p.x()-b.x())/b.width(),(p.y()-b.y())/b.height());
-    // 反馈本次画笔轨迹，结束后由结果预览替换。
-    const double r=radius*std::min(b.width(),b.height());
-    auto *mark=scene()->addEllipse(p.x()-r,p.y()-r,2*r,2*r,QPen(Qt::NoPen),
-                                  QColor(foreground?QColor(30,180,100,110):QColor(230,60,80,110)));
-    mark->setData(0,"brushMark");mark->setZValue(10);
-}
-void BrushPreview::mousePressEvent(QMouseEvent *e) {
-    if(painting && e->button()==Qt::LeftButton && sceneRect().contains(mapToScene(e->position().toPoint()))) {
-        stroke_={};stroke_.foreground=foreground;stroke_.radius=radius;drawing_=true;
-        append(e->position().toPoint());e->accept();return;
-    }
-    PreviewLabel::mousePressEvent(e);
-}
-void BrushPreview::mouseMoveEvent(QMouseEvent *e) {
-    pointer_=e->position().toPoint();pointerInside_=viewport()->rect().contains(pointer_);
-    if(painting)viewport()->setCursor(Qt::CrossCursor);
-    viewport()->update();
-    if(drawing_){append(e->position().toPoint());e->accept();return;}
-    PreviewLabel::mouseMoveEvent(e);
-}
-void BrushPreview::mouseReleaseEvent(QMouseEvent *e) {
-    if(drawing_ && e->button()==Qt::LeftButton) {
-        append(e->position().toPoint());drawing_=false;
-        for(auto *item:scene()->items())if(item->data(0).toString()=="brushMark")delete item;
-        if(!stroke_.points.empty() && onStroke)onStroke(std::move(stroke_));
-        e->accept();return;
-    }
-    PreviewLabel::mouseReleaseEvent(e);
-}
 BackgroundDialog::BackgroundDialog(const QImage &original,const ImageProcessor::Options &options,QWidget *parent,BrushPreview *sharedPreview)
     : QDialog(parent),working_(options),preview_(sharedPreview?sharedPreview:new BrushPreview(this)),selection_(new SelectionItem),
       buttons_(new QDialogButtonBox(QDialogButtonBox::Ok|QDialogButtonBox::Cancel,this)),message_(new QLabel(this)),sharedPreview_(sharedPreview!=nullptr)
@@ -162,7 +106,7 @@ BackgroundDialog::BackgroundDialog(const QImage &original,const ImageProcessor::
     connect(buttons_,&QDialogButtonBox::rejected,this,&QDialog::reject);
     debounce_.setSingleShot(true);debounce_.setInterval(150);
     connect(&debounce_,&QTimer::timeout,this,&BackgroundDialog::startPreview);
-    connect(&watcher_,&QFutureWatcher<PreviewResult>::finished,this,[this] {
+    connect(&watcher_,&QFutureWatcher<BackgroundPreview::Result>::finished,this,[this] {
         if(dirty_){startPreview();return;}
         const auto result=watcher_.result();
         if(result.error.isEmpty()) {
@@ -208,7 +152,7 @@ BackgroundDialog::BackgroundDialog(const QImage &original,const ImageProcessor::
         if(path.isEmpty())return;
         const QImage image=QImage(path).convertToFormat(QImage::Format_RGB888);
         if(image.isNull()){message_->setText("无法读取背景图片。");return;}
-        working_.backgroundImage=cv::Mat(image.height(),image.width(),CV_8UC3,const_cast<uchar*>(image.constBits()),image.bytesPerLine()).clone();
+        working_.backgroundImage=ImageConversion::rgbView(image).clone();
         schedulePreview();
     });
     connect(radius,&QSlider::valueChanged,this,[this](int value){preview_->radius=value/1000.0;preview_->viewport()->update();});
@@ -225,14 +169,14 @@ BackgroundDialog::BackgroundDialog(const QImage &original,const ImageProcessor::
         const auto b=preview_->sceneRect();selection_->setSelection(QRectF(b.width()*.1,b.height()*.05,b.width()*.8,b.height()*.9));schedulePreview();
     });
     try {
-        const int limit=sharedPreview_?1280:1024;
+        const int limit=sharedPreview_?PreviewImage::MaxExtent:1024;
         auto base=options;base.background=ImageProcessor::BackgroundMode::None;base.clearTone();base.grayscale=false;
         if(base.targetSize!=cv::Size()) {
             const QSize actual(base.targetSize.width,base.targetSize.height);
-            const QSize size=actual.scaled(limit,limit,Qt::KeepAspectRatio).boundedTo(actual);
+            const QSize size=PreviewImage::boundedSize(actual,limit);
             base.targetSize=cv::Size(size.width(),size.height());
         }
-        const QImage small=original.width()>limit||original.height()>limit?original.scaled(limit,limit,Qt::KeepAspectRatio,Qt::SmoothTransformation):original;
+        const QImage small=PreviewImage::thumbnail(original,limit);
         base_=ImageProcessing::processImage(small,base);
         const auto r=working_.foregroundRect;
         if(!sharedPreview_)preview_->setImage(QPixmap::fromImage(base_));
@@ -277,23 +221,6 @@ void BackgroundDialog::startPreview() {
     const QImage source=base_;
     const bool needsMask=preview_->painting;
     watcher_.setFuture(QtConcurrent::run([source,options,needsMask] {
-        PreviewResult result;
-        try{
-            if(options.segmentation==ImageProcessor::SegmentationMethod::Region
-                && (options.background!=ImageProcessor::BackgroundMode::None || needsMask)) {
-                const auto samples=ImageProcessor::regionSamples(cv::Size(source.width(),source.height()),options);
-                if(samples.background==0)
-                    result.notice="当前没有背景标记，已保留整张图片。请缩小主体范围，或用“删除背景”画笔标出一部分背景。";
-                else if(samples.foreground==0)
-                    result.notice="主体已被全部标为背景。可撤销笔触，或用“保留主体”画笔补回需要保留的区域。";
-                else if(!samples.canSegment())
-                    result.notice="当前范围或画笔标记太少，暂按手工蒙版预览。请扩大主体范围，或补画主体和背景后继续自动识别。";
-            }
-            result.image=ImageProcessing::processImage(source,options);
-            if(options.background==ImageProcessor::BackgroundMode::Remove)result.mask=result.image;
-            else if(needsMask){auto maskOptions=options;maskOptions.background=ImageProcessor::BackgroundMode::Remove;
-                maskOptions.clearTone();maskOptions.grayscale=false;result.mask=ImageProcessing::processImage(source,maskOptions);}
-        }catch(const std::exception &e){result.error=QString::fromUtf8(e.what());}
-        return result;
+        return BackgroundPreview::render(source,options,needsMask);
     }));
 }
