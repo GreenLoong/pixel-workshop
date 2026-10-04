@@ -57,6 +57,21 @@ jobs:
         run: |
           $env:QT_SCALE_FACTOR='2'
           ctest --test-dir build-ci --output-on-failure --output-junit test-results-200.xml
+      - name: Package Windows candidate
+        run: >-
+          ./tools/package-windows.ps1
+          -BuildDirectory build-ci
+          -QtDirectory "$env:QT_ROOT_DIR"
+          -OpenCVDll "$env:OPENCV_ROOT/x64/vc16/bin/opencv_world4130.dll"
+          -OutputDirectory build/pixel-workshop-candidate
+      - name: Upload Windows package
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: windows-package
+          path: |
+            build/pixel-workshop-candidate.zip
+            build/pixel-workshop-candidate.zip.sha256
+          if-no-files-found: error
       - name: Upload test logs
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -66,3 +81,25 @@ jobs:
             build-ci/test-results*.xml
             build-ci/Testing/Temporary/LastTest.log
           if-no-files-found: ignore
+  verify-package:
+    needs: build
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: windows-package
+          path: delivery
+      - name: Verify package without installing Qt or OpenCV
+        shell: pwsh
+        run: |
+          $taskHash=(Get-Content delivery/pixel-workshop-candidate.zip.sha256).Split(' ')[0]
+          if((Get-FileHash delivery/pixel-workshop-candidate.zip -Algorithm SHA256).Hash -ne $taskHash) {throw 'Archive checksum mismatch.'}
+          Expand-Archive delivery/pixel-workshop-candidate.zip -DestinationPath delivery/unpacked
+          & ./delivery/unpacked/pixel-workshop-candidate/verify-package.ps1
+      - name: Upload package verification record
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: windows-package-verification
+          path: delivery/unpacked/pixel-workshop-candidate/verification-result.json
+          if-no-files-found: error

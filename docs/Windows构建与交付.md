@@ -5,7 +5,7 @@
 ## 构建与使用
 
 1. 在 Qt Creator 打开 `ImageBatchTool/CMakeLists.txt`，选择 MSVC 64 位 Kit 和 Release。
-2. 设置 `OpenCV_DIR=D:/Tools/OpenCV/opencv/build`，执行 CMake，然后构建。
+2. 设置 `OpenCV_DIR=D:/Tools/OpenCV/opencv/build`。交付构建再设置 `IMAGEBATCHTOOL_BUILD_TESTS=ON`，使程序和 `PixelWorkshopCheck.exe` 一起生成，执行 CMake，然后构建。
 3. 本机生成文件为 `ImageBatchTool/build/release-clean/ImageBatchTool.exe`。运行依赖必须随程序提供，不能只复制 exe。
 4. 启动后打开图片，用“编辑图片”进入编辑页，顶部切换模式，点击“完成编辑”应用全部调整；取消返回主页且不修改主图。单张使用“另存为”。批量选择不同的输入、输出目录，开始后查看进度与结果表；取消等待当前图片运算结束，保留已完成输出。
 5. 更新构建后，已打开的旧进程不会自动切换版本。先保存需要保留的结果，关闭旧窗口，再运行新程序。
@@ -18,17 +18,17 @@
 ./tools/package-windows.ps1
 ```
 
-脚本检查 Release 构建、复制程序、调用 windeployqt 收集 Qt 依赖、复制 OpenCV DLL，生成 `build/windows-package-<日期时间>` 和同名 ZIP。它使用新目录保留先前打包结果。更换电脑时通过脚本的 `BuildDirectory`、`QtDirectory`、`OpenCVDll` 参数传入实际路径。
+脚本要求源码已提交，检查 Release 构建及版本资源、复制程序与自检工具、调用 windeployqt 收集 Qt 依赖和编译器运行库、复制 OpenCV DLL，生成 `build/pixel-workshop-v<版本>-windows-x64-<日期时间>`、同名 ZIP 和 SHA256 文件。包内有源码提交、逐文件哈希清单、自动验收脚本、操作清单与依赖许可证。它使用新目录保留先前打包结果。更换电脑时通过脚本的 `BuildDirectory`、`QtDirectory`、`OpenCVDll` 参数传入实际路径。
 
 windeployqt 负责 Qt 依赖，额外的 OpenCV 运行库单独复制。插件需要保持 `platforms`、`imageformats` 等子目录结构，`qt.conf` 让程序从包内寻找插件。依据见 [Qt 6.11 Windows 部署文档](https://doc.qt.io/qt-6.11/windows-deployment.html)。
 
-目标电脑需要与构建工具兼容的 x64 Visual C++ 运行库；安装方式与当前下载见 [Microsoft 官方运行库文档](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170)。脚本不复制开发电脑中的散装 MSVC 运行库，不自动安装目标电脑的软件。
+目标电脑需要与构建工具兼容的 x64 Visual C++ 运行库。windeployqt 使用官方部署能力收集运行库；如果包内提供 `vc_redist.x64.exe`，由使用者在目标电脑安装。缺少运行库时，安装方式与下载见 [Microsoft 官方运行库文档](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170)。脚本不自动安装目标电脑的软件。
 
 ## 验证记录与待办
 
-我完成 Release 构建，并将进程 PATH 限制为 Windows 系统目录后启动，主窗口创建成功；嵌入的 Windows 图标为猫娘画师图标。五项 CTest 在普通与 200% 显示缩放下通过，覆盖图像处理、编辑页交互、后台批量任务、人像模型与像素适配。分层重构后，我从新资源目录完成打包，模型许可证与来源说明仍随运行包提供。
+v0.18.1 在 GitHub 上的 Release 配置构建和八项 CTest 已在普通与 200% 显示缩放下通过，记录见[远端运行](https://github.com/GreenLoong/pixel-workshop/actions/runs/37200344587)。v0.19.0 增加第九项部署自检，本机九项 CTest 已在普通与 200% 显示缩放下通过，并在工作流中增加打包和独立运行机验证；部署结果以对应 Actions 和包内 `verification-result.json` 为准。
 
-本机启动检查不能替代干净电脑验收。取得 ZIP 后解压整个文件夹，再启动其中的 exe；不要直接在压缩软件中运行。跨电脑检查包括打开中文路径图片、编辑后保存透明 PNG、含坏图的批量任务、取消和反复启动。真实鼠标／触控板和不同 Windows 电脑的检查仍待完成。
+独立运行机不安装 Qt/OpenCV，且自检将子进程 PATH 限制为 Windows 系统目录，但 GitHub Windows 镜像仍带有系统组件和 Visual C++ 运行库。实际电脑验收按[开始使用与验收](另一台电脑验收.md)执行；真实鼠标／触控板和使用者设备体验仍待完成。
 
 ## 常见问题
 

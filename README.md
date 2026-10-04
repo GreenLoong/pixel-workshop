@@ -36,11 +36,11 @@
 
 在 Qt Creator 打开 `ImageBatchTool/CMakeLists.txt`，选择 MSVC 64 位 Kit，为 CMake 配置 `OpenCV_DIR` 指向安装目录内含 `OpenCVConfig.cmake` 的文件夹。具体步骤见[环境配置文档](docs/环境配置.md)。
 
-构建测试时启用 `IMAGEBATCHTOOL_BUILD_TESTS=ON`，构建后运行 CTest。OpenCV DLL 所在目录需要位于测试进程的 PATH。八项检查覆盖处理算法、参数对话框与预览交互、后台批量任务、人像模型推理、图像内存适配、单张后台任务、未保存修改保护和批量参数预设。真实鼠标、触控板和不同电脑上的运行仍需手动验收。
+构建测试时启用 `IMAGEBATCHTOOL_BUILD_TESTS=ON`，构建后运行 CTest。OpenCV DLL 所在目录需要位于测试进程的 PATH。九项检查覆盖处理算法、参数对话框与预览交互、后台批量任务、人像模型推理、图像内存适配、单张后台任务、未保存修改保护、批量参数预设和部署自检。真实鼠标、触控板和不同电脑上的运行仍需手动验收。
 
-每次推送 main 或提交 PR，GitHub 会自动构建并运行普通与 200% 显示缩放下的测试；记录见 [Actions](https://github.com/GreenLoong/pixel-workshop/actions/workflows/windows.yml)。
+每次推送 main 或提交 PR，GitHub 会自动构建并运行普通与 200% 显示缩放下的测试，生成 ZIP，再在不安装 Qt/OpenCV 的独立 Windows 运行机验证包内文件、处理流程和主窗口启动；记录及 `windows-package` 下载见 [Actions](https://github.com/GreenLoong/pixel-workshop/actions/workflows/windows.yml)。
 
-Windows 分发方法见[Windows 构建与交付](docs/Windows构建与交付.md)。
+Windows 分发方法见[Windows 构建与交付](docs/Windows构建与交付.md)。取得包后整体解压，运行 `ImageBatchTool.exe`；在包目录执行 `powershell -NoProfile -ExecutionPolicy Bypass -File .\verify-package.ps1` 可生成自动验收记录。另一台电脑的人工检查见[开始使用与验收](docs/另一台电脑验收.md)。
 
 ## 源码组织
 
@@ -59,4 +59,4 @@ Windows 分发方法见[Windows 构建与交付](docs/Windows构建与交付.md)
 
 背景算法的来源、许可证和替换依据见[人像分割算法替换](docs/人像分割算法替换.md)。
 
-分层之后的稳定性与发布完善记录见[小版本记录](docs/稳定性与发布完善.md)。当前版本：v0.18.0。
+分层之后的稳定性与发布完善记录见[小版本记录](docs/稳定性与发布完善.md)。当前版本：v0.19.0 候选版，实际设备人工验收待完成。
