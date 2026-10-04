@@ -2,7 +2,8 @@
     [string]$BuildDirectory = "$PSScriptRoot/../ImageBatchTool/build/release-clean",
     [string]$QtDirectory = 'D:/Qt/6.11.1/msvc2022_64',
     [string]$OpenCVDll = 'D:/Tools/OpenCV/opencv/build/x64/vc16/bin/opencv_world4130.dll',
-    [string]$OutputDirectory = ''
+    [string]$OutputDirectory = '',
+    [string]$RuntimeInstaller = ''
 )
 $ErrorActionPreference = 'Stop'
 $taskExecutable = Join-Path $BuildDirectory 'ImageBatchTool.exe'
@@ -45,12 +46,19 @@ try {
     $env:VCINSTALLDIR = $taskOldVC
 }
 Copy-Item -LiteralPath $OpenCVDll -Destination $taskPackage.FullName
+if ($RuntimeInstaller) {
+    $taskSignature = Get-AuthenticodeSignature -LiteralPath $RuntimeInstaller
+    if ($taskSignature.Status -ne 'Valid' -or $taskSignature.SignerCertificate.Subject -notmatch 'Microsoft Corporation') { throw 'Microsoft runtime publisher signature invalid.' }
+    if ([version](Get-Item -LiteralPath $RuntimeInstaller).VersionInfo.ProductVersion -lt [version]'14.50.35719.0') { throw 'Microsoft runtime installer is too old.' }
+    Copy-Item -LiteralPath $RuntimeInstaller -Destination (Join-Path $taskPackage.FullName 'vc_redist.x64.exe') -Force
+}
 foreach ($taskFile in @('Qt6Core.dll','Qt6Gui.dll','Qt6Widgets.dll','platforms/qwindows.dll','imageformats/qjpeg.dll','vc_redist.x64.exe')) {
     if (-not (Test-Path -LiteralPath (Join-Path $taskPackage.FullName $taskFile))) { throw "Deployment missing: $taskFile" }
 }
 [IO.File]::WriteAllText((Join-Path $taskPackage.FullName 'qt.conf'), "[Paths]`nPlugins=.`n", [Text.UTF8Encoding]::new($false))
 Copy-Item -LiteralPath "$PSScriptRoot/../docs/Windows构建与交付.md" -Destination (Join-Path $taskPackage.FullName '使用说明.md')
 Copy-Item -LiteralPath "$PSScriptRoot/../docs/另一台电脑验收.md" -Destination $taskPackage.FullName
+Copy-Item -LiteralPath "$PSScriptRoot/../docs/v1.0发布说明.md" -Destination $taskPackage.FullName
 Copy-Item -LiteralPath "$PSScriptRoot/../docs/人像分割算法替换.md" -Destination $taskPackage.FullName
 Copy-Item -LiteralPath "$PSScriptRoot/verify-package.ps1" -Destination $taskPackage.FullName
 New-Item -ItemType Directory -Path (Join-Path $taskPackage.FullName 'licenses') | Out-Null

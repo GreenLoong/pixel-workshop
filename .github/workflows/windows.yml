@@ -58,6 +58,11 @@ jobs:
         run: |
           $env:QT_SCALE_FACTOR='2'
           ctest --test-dir build-ci --output-on-failure --output-junit test-results-200.xml
+      - name: Prepare official installer tools
+        run: |
+          $taskTools = ./tools/prepare-installer-tools.ps1
+          "INNO_COMPILER=$($taskTools.Compiler)" >> $env:GITHUB_ENV
+          "VC_RUNTIME_INSTALLER=$($taskTools.RuntimeInstaller)" >> $env:GITHUB_ENV
       - name: Package Windows candidate
         run: >-
           ./tools/package-windows.ps1
@@ -65,6 +70,12 @@ jobs:
           -QtDirectory "$env:QT_ROOT_DIR"
           -OpenCVDll "$env:OPENCV_ROOT/x64/vc16/bin/opencv_world4130.dll"
           -OutputDirectory build/pixel-workshop-candidate
+          -RuntimeInstaller "$env:VC_RUNTIME_INSTALLER"
+      - name: Build Windows installer
+        run: >-
+          ./tools/package-installer.ps1
+          -PackageDirectory build/pixel-workshop-candidate
+          -CompilerPath "$env:INNO_COMPILER"
       - name: Upload Windows package
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -72,6 +83,8 @@ jobs:
           path: |
             build/pixel-workshop-candidate.zip
             build/pixel-workshop-candidate.zip.sha256
+            build/installers/*.exe
+            build/installers/*.exe.sha256
           if-no-files-found: error
       - name: Upload test logs
         if: always()
@@ -87,6 +100,7 @@ jobs:
     runs-on: windows-2022
     timeout-minutes: 10
     steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: windows-package
@@ -98,9 +112,17 @@ jobs:
           if((Get-FileHash delivery/pixel-workshop-candidate.zip -Algorithm SHA256).Hash -ne $taskHash) {throw 'Archive checksum mismatch.'}
           Expand-Archive delivery/pixel-workshop-candidate.zip -DestinationPath delivery/unpacked
           & ./delivery/unpacked/pixel-workshop-candidate/verify-package.ps1
+      - name: Verify installer and uninstaller
+        shell: pwsh
+        run: |
+          $taskInstaller = Get-ChildItem delivery/installers -Filter '*.exe' | Select-Object -First 1
+          ./tools/verify-installer.ps1 -Installer $taskInstaller.FullName -OutputDirectory delivery/installer-verification
       - name: Upload package verification record
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: windows-package-verification
-          path: delivery/unpacked/pixel-workshop-candidate/verification-result.json
+          path: |
+            delivery/unpacked/pixel-workshop-candidate/verification-result.json
+            delivery/installer-verification/installer-verification.json
+            delivery/installer-verification/*.log
           if-no-files-found: error

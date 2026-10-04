@@ -2,6 +2,8 @@
 
 更新日期：2026-10-05。本文供我和取得源码的开发者复现构建、准备运行目录与检查交付；适用于本机 Qt 6.11.1 MSVC 2022 x64 和 OpenCV 4.13.0。
 
+当前代码版本为 v1.0.0，交付状态为候选版，另一台真实设备的人工验收尚未完成。功能范围与已知使用边界见[v1.0 发布说明](v1.0发布说明.md)。
+
 ## 构建与使用
 
 1. 在 Qt Creator 打开 `ImageBatchTool/CMakeLists.txt`，选择 MSVC 64 位 Kit 和 Release。
@@ -39,7 +41,26 @@
 
 windeployqt 负责 Qt 依赖，额外的 OpenCV 运行库单独复制。插件需要保持 `platforms`、`imageformats` 等子目录结构，`qt.conf` 让程序从包内寻找插件。依据见 [Qt 6.11 Windows 部署文档](https://doc.qt.io/qt-6.11/windows-deployment.html)。
 
-目标电脑需要与构建工具兼容的 x64 Visual C++ 运行库。windeployqt 使用官方部署能力收集运行库；如果包内提供 `vc_redist.x64.exe`，由使用者在目标电脑安装。缺少运行库时，安装方式与下载见 [Microsoft 官方运行库文档](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170)。脚本不自动安装目标电脑的软件。
+目标电脑需要与构建工具兼容的 x64 Visual C++ 运行库。便携包由使用者安装包内的 `vc_redist.x64.exe`；EXE 安装向导按需调用这个微软官方安装程序。部署依据见 [Microsoft 官方运行库文档](https://learn.microsoft.com/en-us/cpp/windows/redistributing-visual-cpp-files?view=msvc-170)。
+
+## 生成 EXE 安装程序
+
+在项目根目录的 PowerShell 执行（源码先提交，Release 与交付自检已构建）：
+
+```powershell
+$taskTools = ./tools/prepare-installer-tools.ps1
+./tools/package-windows.ps1 -OutputDirectory build/pixel-workshop-v1.0.0-windows-x64-rc1 -RuntimeInstaller $taskTools.RuntimeInstaller
+./tools/package-installer.ps1 -PackageDirectory build/pixel-workshop-v1.0.0-windows-x64-rc1 -CompilerPath $taskTools.Compiler
+./tools/verify-installer.ps1 -Installer build/installers/PixelWorkshop-1.0.0-rc1-windows-x64-setup.exe
+```
+
+准备脚本取得 Inno Setup 7.1.0 官方签名安装包，核对固定 SHA256，以官方便携模式提取编译器；取得微软官方 x64 运行库并验证发布者签名及版本。工具只缓存到忽略的 build 目录，不提交编译器或运行库二进制。运行库的实际版本和哈希可从包内文件与 manifest 追溯。
+
+安装布局集中在 `tools/installer/pixel-workshop.iss`，使用 Inno Setup 官方安装、快捷方式和卸载能力。默认按用户安装到 `%LOCALAPPDATA%/Programs/Pixel Workshop`；只有缺少运行库时需要批准微软程序的权限提示。安装器检测本版已验证的最低运行库 14.50.35719.0，不在已有兼容运行库时重复安装。最低系统为 Windows 10 1809，参考 [Qt 6.11 支持平台](https://doc.qt.io/qt-6.11/supported-platforms.html)。
+
+验证脚本先拒绝覆盖已有用户安装，然后静默安装到独立目录；核对快捷方式、包内哈希、图像处理和主窗口启动，再验证重装、卸载及后来创建的用户文件保留。日志与 `installer-verification.json` 放在独立验收目录。GitHub 的第二台运行机也执行相同步骤。脚本会实际安装和卸载候选包，只用于没有已有 Pixel Workshop 安装的验收环境。
+
+安装包和卸载程序暂未进行项目代码签名；第三方运行库及工具来源签名仍会校验。ZIP、EXE 均提供 SHA256。候选包通过 GitHub prerelease 交付，真实设备人工清单通过后再确认稳定交付。
 
 ## 验证记录与待办
 
