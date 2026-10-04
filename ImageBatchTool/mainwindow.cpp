@@ -490,7 +490,7 @@ void MainWindow::setupMenus()
     auto *geometry = edit->addAction("裁剪与旋转…");
     geometry->setShortcut(QKeySequence("Ctrl+R"));
     connect(geometry,&QAction::triggered,this,&MainWindow::showGeometryDialog);
-    auto *tone = edit->addAction("亮度与对比度…");
+    auto *tone = edit->addAction("颜色与光线…");
     connect(tone,&QAction::triggered,this,&MainWindow::showToneDialog);
     auto *size = edit->addAction("调整大小…");
     connect(size,&QAction::triggered,this,&MainWindow::showResizeDialog);

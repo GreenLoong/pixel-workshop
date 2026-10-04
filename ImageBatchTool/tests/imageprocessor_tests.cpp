@@ -82,6 +82,26 @@ int main()
         catch(const cv::Exception &) {cropRejected=true;}
         require(cropRejected,"Invalid crop accepted");
         std::cout<<"PASS: crop, flip, rotation, canvas expansion and input protection\n";
+        const cv::Mat mid(8,8,CV_8UC3,cv::Scalar(64,64,64));
+        ImageProcessor::Options color;
+        color.exposure=1;
+        require(ImageProcessor::process(mid,color).at<cv::Vec3b>(0,0)[0]==128,"Exposure stops");
+        color={};color.saturation=-100;
+        const auto desaturated=ImageProcessor::process(original,color).at<cv::Vec3b>(0,0);
+        require(desaturated[0]==desaturated[1] && desaturated[1]==desaturated[2],"Desaturation");
+        color={};color.temperature=100;
+        const auto warm=ImageProcessor::process(mid,color).at<cv::Vec3b>(0,0);
+        require(warm[0]>warm[2],"Warm color balance");
+        color={};color.shadows=100;
+        require(ImageProcessor::process(mid,color).at<cv::Vec3b>(0,0)[0]>64,"Shadow adjustment");
+        color={};color.highlights=-100;
+        require(ImageProcessor::process(original,color).at<cv::Vec3b>(0,0)[0]<255,"Highlight adjustment");
+        color={};color.vignette=100;
+        auto vignette=ImageProcessor::process(mid,color);
+        require(vignette.at<cv::Vec3b>(0,0)[0]<vignette.at<cv::Vec3b>(4,4)[0],"Vignette falloff");
+        color={};color.tint=10;color.clarity=30;color.saturation=20;color.exposure=.5;color.grayscale=true;
+        require(ImageProcessor::process(mid,color).channels()==1,"Combined color and grayscale");
+        std::cout<<"PASS: exposure, saturation, color balance, selective tones and vignette\n";
     } catch (const std::exception &error) {
         std::cerr << error.what() << '\n';
         return 1;
