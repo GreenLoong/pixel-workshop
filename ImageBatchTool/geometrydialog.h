@@ -12,7 +12,8 @@ class QComboBox;
 class GeometryDialog : public QDialog {
     Q_OBJECT
 public:
-    GeometryDialog(const QImage &original, const ImageProcessor::Options &options, QWidget *parent=nullptr);
+    GeometryDialog(const QImage &original, const ImageProcessor::Options &options, QWidget *parent=nullptr,
+                   PreviewLabel *sharedPreview=nullptr);
     ImageProcessor::Options options() const;
 private:
     void updateImage();
@@ -27,5 +28,6 @@ private:
     QLabel *sizeLabel_;
     QDialogButtonBox *buttons_;
     QComboBox *ratio_;
+    bool sharedPreview_;
 };
 #endif

@@ -18,8 +18,8 @@
 #include <exception>
 #include <QCheckBox>
 
-ToneDialog::ToneDialog(const QImage &original,const ImageProcessor::Options &options,QWidget *parent)
-    : QDialog(parent),initial_(options),working_(options),preview_(new PreviewLabel(this)),
+ToneDialog::ToneDialog(const QImage &original,const ImageProcessor::Options &options,QWidget *parent,PreviewLabel *sharedPreview)
+    : QDialog(parent),initial_(options),working_(options),preview_(sharedPreview?sharedPreview:new PreviewLabel(this)),
       brightness_(new QSpinBox(this)),contrast_(new QDoubleSpinBox(this)),
       buttons_(new QDialogButtonBox(QDialogButtonBox::Ok|QDialogButtonBox::Cancel,this)),
       error_(new QLabel(this))
@@ -38,11 +38,14 @@ ToneDialog::ToneDialog(const QImage &original,const ImageProcessor::Options &opt
     auto *hint=new QLabel("拖动即时预览，点击轨道直接定位。确定应用，取消保留当前图片。",this);
     hint->setObjectName("modeHint"); body->addWidget(hint);
     auto *editor=new QHBoxLayout; editor->setSpacing(20);
-    preview_->setObjectName("tonePreview"); editor->addWidget(preview_,1);
+    if(!sharedPreview){preview_->setObjectName("tonePreview");editor->addWidget(preview_,1);}
     auto *panel=new QWidget(this); auto *rows=new QVBoxLayout(panel); rows->setSpacing(18);
     rows->setContentsMargins(8,4,8,4);
-    auto *scroll=new QScrollArea(this); scroll->setWidget(panel); scroll->setWidgetResizable(true);
-    scroll->setFrameShape(QFrame::NoFrame); scroll->setFixedWidth(320); editor->addWidget(scroll);
+    if(sharedPreview)editor->addWidget(panel);
+    else {
+        auto *scroll=new QScrollArea(this); scroll->setWidget(panel); scroll->setWidgetResizable(true);
+        scroll->setFrameShape(QFrame::NoFrame); scroll->setFixedWidth(320); editor->addWidget(scroll);
+    }
     body->addLayout(editor,1);
     auto *gray=new QCheckBox("灰度化",this);gray->setObjectName("grayscaleCheckBox");
     gray->setChecked(options.grayscale);rows->addWidget(gray);

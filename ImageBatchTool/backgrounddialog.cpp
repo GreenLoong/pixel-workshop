@@ -82,9 +82,9 @@ void BrushPreview::mouseReleaseEvent(QMouseEvent *e) {
     }
     PreviewLabel::mouseReleaseEvent(e);
 }
-BackgroundDialog::BackgroundDialog(const QImage &original,const ImageProcessor::Options &options,QWidget *parent)
-    : QDialog(parent),working_(options),preview_(new BrushPreview(this)),selection_(new SelectionItem),
-      buttons_(new QDialogButtonBox(QDialogButtonBox::Ok|QDialogButtonBox::Cancel,this)),message_(new QLabel(this))
+BackgroundDialog::BackgroundDialog(const QImage &original,const ImageProcessor::Options &options,QWidget *parent,BrushPreview *sharedPreview)
+    : QDialog(parent),working_(options),preview_(sharedPreview?sharedPreview:new BrushPreview(this)),selection_(new SelectionItem),
+      buttons_(new QDialogButtonBox(QDialogButtonBox::Ok|QDialogButtonBox::Cancel,this)),message_(new QLabel(this)),sharedPreview_(sharedPreview!=nullptr)
 {
     setObjectName("BackgroundDialog");resize(1040,760);setMinimumSize(820,640);
     auto *root=new QVBoxLayout(this);root->setContentsMargins(12,12,12,12);root->setSpacing(0);
@@ -97,12 +97,17 @@ BackgroundDialog::BackgroundDialog(const QImage &original,const ImageProcessor::
     auto *hint=new QLabel("人像模式自动识别人物与衣物；非人像请选择通用区域。画笔可修正保留 / 删除区域，滚轮可缩放。",this);
     hint->setWordWrap(true);hint->setObjectName("modeHint");body->addWidget(hint);
     auto *editor=new QHBoxLayout;editor->setSpacing(18);body->addLayout(editor,1);
-    preview_->setObjectName("backgroundPreview");preview_->setCornerRadius(8);
-    selection_->setParent(this);preview_->scene()->addItem(selection_);editor->addWidget(preview_,1);
+    if(!sharedPreview_) {
+        preview_->setObjectName("backgroundPreview");preview_->setCornerRadius(8);editor->addWidget(preview_,1);
+    }
+    selection_->setParent(this);preview_->scene()->addItem(selection_);
     auto *panel=new QWidget(this);auto *rows=new QVBoxLayout(panel);rows->setSpacing(16);
     rows->setContentsMargins(8,8,8,8);
-    auto *scroll=new QScrollArea(this);scroll->setWidgetResizable(true);scroll->setFrameShape(QFrame::NoFrame);
-    scroll->setFixedWidth(320);scroll->setWidget(panel);editor->addWidget(scroll);
+    if(sharedPreview_)editor->addWidget(panel);
+    else {
+        auto *scroll=new QScrollArea(this);scroll->setWidgetResizable(true);scroll->setFrameShape(QFrame::NoFrame);
+        scroll->setFixedWidth(320);scroll->setWidget(panel);editor->addWidget(scroll);
+    }
     rows->addWidget(new QLabel("背景效果",this));
     auto *modes=new QVBoxLayout;
     auto *mode=new QComboBox(this);mode->setObjectName("backgroundMode");
@@ -212,7 +217,7 @@ BackgroundDialog::BackgroundDialog(const QImage &original,const ImageProcessor::
     connect(undoStroke,&QPushButton::clicked,this,[this]{if(!working_.strokes.empty()){working_.strokes.pop_back();schedulePreview();}});
     preview_->onStroke=[this](auto stroke){working_.strokes.push_back(std::move(stroke));schedulePreview();};
     connect(selection_,&SelectionItem::selectionChanged,this,[this] {
-        const auto b=preview_->sceneRect(),r=selection_->selection();if(b.isEmpty())return;
+        const QRectF b(QPointF(),base_.size());const auto r=selection_->selection();if(b.isEmpty())return;
         working_.foregroundRect=cv::Rect2d(r.x()/b.width(),r.y()/b.height(),r.width()/b.width(),r.height()/b.height());schedulePreview();
     });
     connect(reset,&QPushButton::clicked,this,[this] {
@@ -220,20 +225,24 @@ BackgroundDialog::BackgroundDialog(const QImage &original,const ImageProcessor::
         const auto b=preview_->sceneRect();selection_->setSelection(QRectF(b.width()*.1,b.height()*.05,b.width()*.8,b.height()*.9));schedulePreview();
     });
     try {
+        const int limit=sharedPreview_?1280:1024;
         auto base=options;base.background=ImageProcessor::BackgroundMode::None;base.clearTone();base.grayscale=false;
         if(base.targetSize!=cv::Size()) {
-            const QSize size=QSize(base.targetSize.width,base.targetSize.height).scaled(1024,1024,Qt::KeepAspectRatio);
+            const QSize actual(base.targetSize.width,base.targetSize.height);
+            const QSize size=actual.scaled(limit,limit,Qt::KeepAspectRatio).boundedTo(actual);
             base.targetSize=cv::Size(size.width(),size.height());
         }
-        const QImage small=original.width()>1024||original.height()>1024?original.scaled(1024,1024,Qt::KeepAspectRatio,Qt::SmoothTransformation):original;
+        const QImage small=original.width()>limit||original.height()>limit?original.scaled(limit,limit,Qt::KeepAspectRatio,Qt::SmoothTransformation):original;
         base_=ImageProcessing::processImage(small,base);
         const auto r=working_.foregroundRect;
-        preview_->setImage(QPixmap::fromImage(base_));selection_->setBounds(preview_->sceneRect());
+        if(!sharedPreview_)preview_->setImage(QPixmap::fromImage(base_));
+        selection_->setBounds(QRectF(QPointF(),base_.size()));
         selection_->setSelection(QRectF(r.x*base_.width(),r.y*base_.height(),r.width*base_.width(),r.height*base_.height()));
-        preview_->fitToWindow();setEngine();range->setChecked(false);updateTool();schedulePreview();
+        if(!sharedPreview_)preview_->fitToWindow();
+        setEngine();range->setChecked(false);initializing_=false;updateTool();schedulePreview();
     }catch(const std::exception &e){message_->setText(QString::fromUtf8(e.what()));buttons_->button(QDialogButtonBox::Ok)->setEnabled(false);}
 }
-BackgroundDialog::~BackgroundDialog(){watcher_.waitForFinished();}
+BackgroundDialog::~BackgroundDialog(){watcher_.waitForFinished();preview_->onStroke={};preview_->painting=false;}
 void BackgroundDialog::schedulePreview() {
     emit optionsChanged();
     if(base_.isNull())return;
@@ -242,6 +251,8 @@ void BackgroundDialog::schedulePreview() {
 }
 void BackgroundDialog::presentPreview()
 {
+    if(sharedPreview_ && initializing_)return;
+    if(sharedPreview_ && result_.isNull() && !selection_->isVisible() && !preview_->painting)return;
     QImage image=result_.isNull()?base_:result_;
     if(selection_->isVisible())image=base_;
     else if(preview_->painting && !mask_.isNull()) {

@@ -25,7 +25,7 @@
 #include <exception>
 
 EditorPage::EditorPage(QWidget *parent):QWidget(parent),host_(new QWidget(this)),
-    body_(new QVBoxLayout(host_)),modes_(new QButtonGroup(this))
+    body_(new QVBoxLayout(host_)),preview_(new BrushPreview(this)),modes_(new QButtonGroup(this))
 {
     setObjectName("editorPage");
     QFile sheet(":/styles/dialog.qss");
@@ -67,7 +67,16 @@ EditorPage::EditorPage(QWidget *parent):QWidget(parent),host_(new QWidget(this))
         auto *b=new QPushButton(title,this);b->setObjectName(QString("editorMode%1").arg(id));
         b->setProperty("modeButton",true);b->setCheckable(true);modes_->addButton(b,id++);toolbar->addWidget(b);
     }
-    body_->setContentsMargins(0,0,0,0);root->addWidget(host_,1);
+    body_->setContentsMargins(10,12,10,12);body_->setAlignment(Qt::AlignTop);
+    auto *workspace=new QHBoxLayout;workspace->setSpacing(18);root->addLayout(workspace,1);
+    preview_->setObjectName("editorPreview");preview_->setKeepViewOnImageChange(true);
+    preview_->setStyleSheet("QGraphicsView {background:#202124; border:1px solid #363a43; border-radius:10px;}");
+    preview_->setBackgroundBrush(QColor("#202124"));preview_->setCornerRadius(10);
+    workspace->addWidget(preview_,1);
+    auto *parameters=new QScrollArea(this);parameters->setObjectName("editorParameters");
+    parameters->setFrameShape(QFrame::NoFrame);parameters->setWidgetResizable(true);parameters->setFixedWidth(320);
+    parameters->setWidget(host_);workspace->addWidget(parameters);
+    connect(preview_,&PreviewLabel::zoomChanged,this,[this](int value){zoom_->setText(QString::number(value)+"%");});
     connect(modes_,&QButtonGroup::idClicked,this,[this](int id){selectMode(static_cast<Mode>(id));});
     connect(cancel,&QPushButton::clicked,this,&EditorPage::cancelled);
     connect(done_,&QPushButton::clicked,this,[this]{record();if(valid())emit accepted();});
@@ -76,6 +85,7 @@ EditorPage::EditorPage(QWidget *parent):QWidget(parent),host_(new QWidget(this))
     recordTimer_.setSingleShot(true);recordTimer_.setInterval(250);
     connect(&recordTimer_,&QTimer::timeout,this,&EditorPage::record);
 }
+EditorPage::~EditorPage(){end();} // 参数控制器先于共享画布释放。
 void EditorPage::begin(const QImage &image,const ImageProcessor::Options &options,const QString &name,Mode mode)
 {
     recordTimer_.stop();original_=image;draft_=options;mode_=mode;
@@ -84,9 +94,10 @@ void EditorPage::begin(const QImage &image,const ImageProcessor::Options &option
 }
 void EditorPage::end()
 {
-    recordTimer_.stop();preview_=nullptr;panel_=nullptr;
+    recordTimer_.stop();panel_=nullptr;
     while(auto *item=body_->takeAt(0)){delete item->widget();delete item;}
     original_={};draft_={};history_.clear();index_=0;
+    preview_->setImage(QPixmap());preview_->fitToWindow();
 }
 ImageProcessor::Options EditorPage::options() const
 {
@@ -138,7 +149,13 @@ void EditorPage::selectMode(Mode mode)
 {
     if(mode==mode_)return;
     if(!valid()) {modes_->button(mode_)->setChecked(true);return;}
-    record();draft_=options();mode_=mode;buildPanel();
+    record();draft_=options();
+    const bool showingResult=mode_==Tone || mode_==Resize
+        || (mode_==Background && !preview_->painting && !panel_->findChild<SelectionItem *>()->isVisible())
+        || (mode_==Crop && draft_.crop==cv::Rect2d() && draft_.targetSize==cv::Size()
+            && draft_.background==ImageProcessor::BackgroundMode::None);
+    const bool reusePreview=mode==Resize && showingResult;
+    mode_=mode;buildPanel(reusePreview);
 }
 void EditorPage::undo()
 {
@@ -150,18 +167,19 @@ void EditorPage::redo()
     if(index_+1>=static_cast<int>(history_.size()))return;
     ++index_;draft_=history_[index_].options;mode_=history_[index_].mode;buildPanel();
 }
-void EditorPage::buildPanel()
+void EditorPage::buildPanel(bool reusePreview)
 {
     recordTimer_.stop();
-    preview_=nullptr;panel_=nullptr;
+    // 只替换参数面板；常驻画布不隐藏、不重新创建，也不排入一次延迟缩放。
+    setUpdatesEnabled(false);
+    panel_=nullptr;
     while(auto *item=body_->takeAt(0)){delete item->widget();delete item;}
-    QWidget *container=nullptr;
-    if(mode_==Crop)panel_=new GeometryDialog(original_,draft_,host_);
-    else if(mode_==Tone)panel_=new ToneDialog(original_,draft_,host_);
-    else if(mode_==Background)panel_=new BackgroundDialog(original_,draft_,host_);
+    preview_->painting=false;preview_->onStroke={};preview_->viewport()->unsetCursor();
+    preview_->setDragMode(QGraphicsView::ScrollHandDrag);
+    if(mode_==Crop)panel_=new GeometryDialog(original_,draft_,host_,preview_);
+    else if(mode_==Tone)panel_=new ToneDialog(original_,draft_,host_,preview_);
+    else if(mode_==Background)panel_=new BackgroundDialog(original_,draft_,host_,preview_);
     else {
-        container=new QWidget(host_);auto *row=new QHBoxLayout(container);row->setContentsMargins(0,0,0,0);row->setSpacing(18);
-        preview_=new PreviewLabel(container);row->addWidget(preview_,1);
         QSize current=original_.size();
         // 尺寸只需要几何结果；跳过分割和调色，避免在切页时重复昂贵处理。
         if(draft_.targetSize!=cv::Size())current=QSize(draft_.targetSize.width,draft_.targetSize.height);
@@ -170,10 +188,8 @@ void EditorPage::buildPanel()
             const auto transformed=ImageProcessor::transformGeometry(dimensions,draft_);
             current=QSize(transformed.cols,transformed.rows);
         }
-        auto *resize=new ResizeDialog(original_.size(),current,container);panel_=resize;
+        auto *resize=new ResizeDialog(original_.size(),current,host_);panel_=resize;
         panel_->setProperty("entrySize",current);resize->embedInEditor();
-        auto *scroll=new QScrollArea(container);scroll->setFrameShape(QFrame::NoFrame);scroll->setWidgetResizable(true);
-        scroll->setFixedWidth(320);scroll->setWidget(resize);row->addWidget(scroll);
         auto source=original_.width()>1280 || original_.height()>1280
             ?original_.scaled(1280,1280,Qt::KeepAspectRatio,Qt::SmoothTransformation):original_;
         const auto refresh=[this,resize,source] {
@@ -183,19 +199,12 @@ void EditorPage::buildPanel()
             try{preview_->setImage(QPixmap::fromImage(ImageProcessing::processImage(source,opt)));}
             catch(const std::exception &e){preview_->setToolTip(QString::fromUtf8(e.what()));}
         };
-        for(auto *spin:resize->findChildren<QSpinBox *>())connect(spin,&QSpinBox::valueChanged,this,refresh);
-        for(auto *button:resize->findChildren<QAbstractButton *>())connect(button,&QAbstractButton::clicked,this,refresh);
-        refresh();
+        connect(resize,&ResizeDialog::targetSizeChanged,this,refresh);
+        if(!reusePreview)refresh();
     }
-    if(!container){DialogAppearance::embed(panel_);container=panel_;preview_=panel_->findChild<PreviewLabel *>();}
-    body_->addWidget(container);panel_->installEventFilter(this);
+    if(mode_!=Resize)DialogAppearance::embed(panel_);
+    body_->addWidget(panel_);panel_->installEventFilter(this);
     panel_->findChild<QDialogButtonBox *>()->button(QDialogButtonBox::Ok)->installEventFilter(this);
-    if(preview_) {
-        preview_->setStyleSheet("QGraphicsView {background:#202124; border:1px solid #363a43; border-radius:10px;}");
-        preview_->setBackgroundBrush(QColor("#202124"));preview_->setCornerRadius(10);
-        connect(preview_,&PreviewLabel::zoomChanged,this,[this](int value){zoom_->setText(QString::number(value)+"%");});
-        QTimer::singleShot(0,preview_,[view=preview_]{view->fitToWindow();});
-    }
     const auto changed=[this]{recordTimer_.start();updateButtons();};
     for(auto *spin:panel_->findChildren<QSpinBox *>())connect(spin,&QSpinBox::valueChanged,this,changed);
     for(auto *spin:panel_->findChildren<QDoubleSpinBox *>())connect(spin,&QDoubleSpinBox::valueChanged,this,changed);
@@ -205,4 +214,5 @@ void EditorPage::buildPanel()
     if(auto *selection=panel_->findChild<SelectionItem *>())connect(selection,&SelectionItem::selectionChanged,this,changed);
     if(auto *bg=qobject_cast<BackgroundDialog *>(panel_))connect(bg,&BackgroundDialog::optionsChanged,this,changed);
     modes_->button(mode_)->setChecked(true);panel_->show();updateButtons();
+    host_->layout()->activate();setUpdatesEnabled(true);
 }

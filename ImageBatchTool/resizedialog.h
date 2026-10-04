@@ -21,6 +21,8 @@ public:
 
     QSize targetSize() const;
     void embedInEditor();
+signals:
+    void targetSizeChanged(QSize size);
 
 private:
     void setupFramelessWindow();
@@ -38,6 +40,7 @@ private:
     QSize originalSize_;
     QSize currentSize_;
     QSize aspectSize_;
+    QSize lastTargetSize_;
 
 };
 

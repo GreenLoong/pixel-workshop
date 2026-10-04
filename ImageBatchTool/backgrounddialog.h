@@ -32,7 +32,8 @@ private:
 class BackgroundDialog final : public QDialog {
     Q_OBJECT
 public:
-    BackgroundDialog(const QImage &original,const ImageProcessor::Options &options,QWidget *parent=nullptr);
+    BackgroundDialog(const QImage &original,const ImageProcessor::Options &options,QWidget *parent=nullptr,
+                     BrushPreview *sharedPreview=nullptr);
     ~BackgroundDialog() override;
     ImageProcessor::Options options() const {return working_;}
 signals:
@@ -53,5 +54,7 @@ private:
     QTimer debounce_;
     QFutureWatcher<PreviewResult> watcher_;
     bool dirty_=false;
+    bool sharedPreview_;
+    bool initializing_=true;
 };
 #endif

@@ -15,6 +15,7 @@ class PreviewLabel : public QGraphicsView
 public:
     explicit PreviewLabel(QWidget *parent = nullptr);
     void setImage(const QPixmap &image);
+    void setKeepViewOnImageChange(bool keep) { keepViewOnImageChange_=keep; }
     int zoomPercent() const;
     QSizeF displayedImageSize() const;
     int cornerRadius() const { return cornerRadius_; }
@@ -44,6 +45,7 @@ private:
     QLabel *placeholder_;
     double scale_ = 1.0;
     bool fitMode_ = true;
+    bool keepViewOnImageChange_ = false;
     int cornerRadius_ = 0; // 全屏预览默认没有圆角；普通预览由样式指定。
 };
 #endif

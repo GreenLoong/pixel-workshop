@@ -44,7 +44,8 @@ void PreviewLabel::setImage(const QPixmap &image)
     placeholder_->setVisible(image.isNull());
     setDragMode(image.isNull() ? QGraphicsView::NoDrag : QGraphicsView::ScrollHandDrag);
     emit imageAvailable(!image.isNull());
-    if (!image.isNull() && (fitMode_ || oldSize != imageItem_->boundingRect().size()))
+    if (!image.isNull() && (fitMode_ || oldSize.isEmpty()
+        || (!keepViewOnImageChange_ && oldSize != imageItem_->boundingRect().size())))
         fitToWindow();
 }
 

@@ -10,7 +10,7 @@ class QVBoxLayout;
 class QButtonGroup;
 class QPushButton;
 class QLabel;
-class PreviewLabel;
+class BrushPreview;
 
 // 编辑会话只持有参数草稿；原图、保存、全局历史由主窗口管理。
 class EditorPage final : public QWidget {
@@ -18,6 +18,7 @@ class EditorPage final : public QWidget {
 public:
     enum Mode { Crop, Tone, Resize, Background };
     explicit EditorPage(QWidget *parent=nullptr);
+    ~EditorPage() override;
     void begin(const QImage &original,const ImageProcessor::Options &options,const QString &name,Mode mode=Crop);
     ImageProcessor::Options options() const;
     void selectMode(Mode mode);
@@ -29,7 +30,7 @@ signals:
     void cancelled();
 private:
     bool eventFilter(QObject *,QEvent *) override;
-    void buildPanel();
+    void buildPanel(bool reusePreview=false);
     void record();
     void updateButtons();
     bool valid() const;
@@ -39,7 +40,7 @@ private:
     QDialog *panel_=nullptr;
     QWidget *host_;
     QVBoxLayout *body_;
-    PreviewLabel *preview_=nullptr;
+    BrushPreview *preview_;
     QButtonGroup *modes_;
     QPushButton *undo_,*redo_,*done_;
     QLabel *name_,*zoom_;

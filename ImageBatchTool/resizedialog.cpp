@@ -238,6 +238,10 @@ void ResizeDialog::updateSummary()
                                      : sizeText + "\n超过本版 4000 万像素的输出限制");
 
     ui->buttonBox->button(QDialogButtonBox::Ok)->setEnabled(allowed);
+    if(size!=lastTargetSize_) {
+        lastTargetSize_=size;
+        emit targetSizeChanged(size);
+    }
 
 }
 

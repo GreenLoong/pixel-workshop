@@ -17,7 +17,7 @@ class ToneDialog : public QDialog
     Q_OBJECT
 public:
     ToneDialog(const QImage &original, const ImageProcessor::Options &options,
-               QWidget *parent = nullptr);
+               QWidget *parent = nullptr,PreviewLabel *sharedPreview=nullptr);
     ImageProcessor::Options options() const;
 
 private:

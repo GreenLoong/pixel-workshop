@@ -36,6 +36,7 @@
 #include <QColorDialog>
 #include <QElapsedTimer>
 #include <QThread>
+#include <QPointer>
 #include <iostream>
 #include <stdexcept>
 
@@ -316,6 +317,28 @@ int main(int argc, char **argv)
         QMetaObject::invokeMethod(&window,"showToneDialog");app.processEvents();
         auto *editorPage=window.findChild<EditorPage *>();
         require(editorPage->isVisible() && !editorPage->findChild<ToneDialog *>()->isWindow(),"Editing still opens a separate window");
+        QPointer<PreviewLabel> canvas=editorPage->findChild<PreviewLabel *>("editorPreview");
+        require(canvas,"Missing shared editor canvas");
+        canvas->setZoomPercent(200);
+        canvas->horizontalScrollBar()->setValue(canvas->horizontalScrollBar()->maximum()/3);
+        canvas->verticalScrollBar()->setValue(canvas->verticalScrollBar()->maximum()/4);
+        const QRect canvasRect(canvas->mapTo(editorPage,QPoint()),canvas->size());
+        const QPointF centerBefore=canvas->mapToScene(canvas->viewport()->rect().center());
+        int imageUpdates=0;
+        const auto updateConnection=QObject::connect(canvas,&PreviewLabel::imageAvailable,editorPage,[&](bool){++imageUpdates;});
+        for(auto mode:{EditorPage::Resize,EditorPage::Crop,EditorPage::Background,EditorPage::Tone}) {
+            imageUpdates=0;editorPage->selectMode(mode);app.processEvents();
+            waitFor([&]{return editorPage->findChild<QPushButton *>("confirmButton",Qt::FindDirectChildrenOnly)->isEnabled();});
+            require(canvas && editorPage->findChild<PreviewLabel *>("editorPreview")==canvas,"Mode switch recreated the preview");
+            require(QRect(canvas->mapTo(editorPage,QPoint()),canvas->size())==canvasRect,"Preview bounds moved between modes");
+            require(canvas->zoomPercent()==200,"Mode switch reset manual zoom");
+            const auto centerAfter=canvas->mapToScene(canvas->viewport()->rect().center());
+            require(QLineF(centerBefore,centerAfter).length()<2,"Mode switch reset image panning");
+            if(mode==EditorPage::Resize)require(imageUpdates==0,"Size mode needlessly regenerated the existing result");
+            require(editorPage->findChildren<PreviewLabel *>().size()==1,"Multiple editor canvases remain alive");
+        }
+        QObject::disconnect(updateConnection);
+        std::cout<<"PASS: fixed preview bounds, persistent canvas, zoom/pan and cached result on entering resize\n";
         editorPage->findChild<QSlider *>("brightnessSlider")->setValue(25);
         editorPage->selectMode(EditorPage::Resize);app.processEvents();
         require(editorPage->options().brightness==25,"Changing mode discarded tone draft");
@@ -442,7 +465,7 @@ int main(int argc, char **argv)
             auto ready=[&]{return portraitEditor.findChild<QPushButton *>("confirmButton",Qt::FindDirectChildrenOnly)->isEnabled();};
             waitFor(ready);
             portraitEditor.findChild<QCheckBox *>("brushEnabled")->setChecked(true);waitFor(ready);
-            auto *view=portraitEditor.findChild<PreviewLabel *>("backgroundPreview");
+            auto *view=portraitEditor.findChild<PreviewLabel *>("editorPreview");
             pointer(view->viewport(),QEvent::MouseMove,view->mapFromScene(view->sceneRect().center()));
             app.processEvents();portraitEditor.grab().save("editor-background.png");
             require(!portraitEditor.findChild<QWidget *>("brushPanel")->isHidden(),"Brush panel not shown in editing page");

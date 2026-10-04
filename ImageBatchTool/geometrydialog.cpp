@@ -19,20 +19,21 @@
 #include <exception>
 #include <cmath>
 
-GeometryDialog::GeometryDialog(const QImage &original, const ImageProcessor::Options &options, QWidget *parent)
+GeometryDialog::GeometryDialog(const QImage &original, const ImageProcessor::Options &options, QWidget *parent,PreviewLabel *sharedPreview)
     : QDialog(parent), previewSource_(original.width()>1280 || original.height()>1280
         ? original.scaled(1280,1280,Qt::KeepAspectRatio,Qt::SmoothTransformation):original),
       originalSize_(original.size()), initial_(options), working_(options),
-      preview_(new PreviewLabel(this)), selection_(new SelectionItem),
+      preview_(sharedPreview?sharedPreview:new PreviewLabel(this)), selection_(new SelectionItem),
       angle_(new QDoubleSpinBox(this)), sizeLabel_(new QLabel(this)),
       buttons_(new QDialogButtonBox(QDialogButtonBox::Ok|QDialogButtonBox::Cancel,this)),
-      ratio_(new QComboBox(this))
+      ratio_(new QComboBox(this)),sharedPreview_(sharedPreview!=nullptr)
 {
     setObjectName("GeometryDialog");
     resize(960,760); setMinimumSize(720,620);
     auto *root = new QVBoxLayout(this); root->setContentsMargins(12,12,12,12); root->setSpacing(0);
     auto *content = new QWidget(this); content->setObjectName("contentPanel");
     auto *body = new QVBoxLayout(content); body->setContentsMargins(24,20,24,20); body->setSpacing(14);
+    if(sharedPreview_)body->setAlignment(Qt::AlignTop);
     root->addWidget(content,1);
     auto *heading = new QLabel("裁剪与旋转",this); heading->setObjectName("dialogHeading");
     auto *header = new QHBoxLayout; header->addWidget(heading,1);
@@ -42,6 +43,7 @@ GeometryDialog::GeometryDialog(const QImage &original, const ImageProcessor::Opt
     auto *hint = new QLabel("拖动边缘调整裁剪框，拖动框内移动。修改裁剪后采用裁剪尺寸，可继续使用“调整大小”。",this);
     hint->setObjectName("modeHint"); hint->setWordWrap(true); body->addWidget(hint);
     auto *tools = new QHBoxLayout;
+    if(sharedPreview_)tools->setDirection(QBoxLayout::TopToBottom);
     const auto button = [&](const QString &text, const QString &name, auto callback) {
         auto *b = new QPushButton(text,this); b->setObjectName(name); b->setAutoDefault(false);
         tools->addWidget(b); connect(b,&QPushButton::clicked,this,callback);
@@ -52,11 +54,16 @@ GeometryDialog::GeometryDialog(const QImage &original, const ImageProcessor::Opt
     button("垂直翻转","flipVerticalButton",[this] { working_.flipVertical=!working_.flipVertical; updateImage(); });
     button("重置","resetGeometryButton",[this] { working_.flipHorizontal=working_.flipVertical=false; angle_->setValue(0); updateImage(); });
     body->addLayout(tools);
-    preview_->setObjectName("geometryPreview"); preview_->setCornerRadius(8);
-    preview_->setStyleSheet("QGraphicsView {background:#f2f3f5; border:1px solid #e3e6ec; border-radius:8px;}");
+    if(!sharedPreview_) {
+        preview_->setObjectName("geometryPreview"); preview_->setCornerRadius(8);
+        preview_->setStyleSheet("QGraphicsView {background:#f2f3f5; border:1px solid #e3e6ec; border-radius:8px;}");
+        body->addWidget(preview_,1);
+    }
     selection_->setParent(this);
-    preview_->scene()->addItem(selection_); body->addWidget(preview_,1);
+    preview_->scene()->addItem(selection_);
     auto *controls = new QHBoxLayout;
+    if(sharedPreview_)controls->setDirection(QBoxLayout::TopToBottom);
+    sizeLabel_->setWordWrap(true);
     controls->addWidget(new QLabel("比例",this));
     ratio_->setObjectName("cropRatio");
     for(auto pair : {std::pair<const char*,double>{"自由",0},{"原图比例",static_cast<double>(original.width())/original.height()},
@@ -65,7 +72,7 @@ GeometryDialog::GeometryDialog(const QImage &original, const ImageProcessor::Opt
     controls->addWidget(ratio_); controls->addWidget(new QLabel("角度",this));
     auto *slider = new QSlider(Qt::Horizontal,this); slider->setObjectName("rotationSlider");
     slider->setRange(-1800,1800); slider->setValue(qRound(options.rotation*10)); AbsoluteSliderStyle::applyTo(slider);
-    controls->addWidget(slider,1);
+    controls->addWidget(slider,sharedPreview_?0:1);
     angle_->setObjectName("rotationSpinBox"); angle_->setRange(-180,180); angle_->setDecimals(1);
     angle_->setValue(options.rotation); angle_->setSuffix("°"); angle_->setButtonSymbols(QAbstractSpinBox::NoButtons);
     controls->addWidget(angle_); body->addLayout(controls); body->addWidget(sizeLabel_);
@@ -98,7 +105,8 @@ void GeometryDialog::updateImage()
         preview_->setDragMode(QGraphicsView::NoDrag);
         selection_->setBounds(preview_->sceneRect());
         selection_->setRatio(ratio_->currentData().toDouble());
-        preview_->fitToWindow(); updateSize();
+        if(!sharedPreview_)preview_->fitToWindow();
+        updateSize();
     } catch(const std::exception &e) {
         sizeLabel_->setText("预览失败："+QString::fromUtf8(e.what()));
         buttons_->button(QDialogButtonBox::Ok)->setEnabled(false);
@@ -122,7 +130,8 @@ void GeometryDialog::updateSize()
                    -static_cast<int>(std::floor(rect.left()/bounds.width()*full.width()));
     const int height=static_cast<int>(std::ceil(rect.bottom()/bounds.height()*full.height()))
                     -static_cast<int>(std::floor(rect.top()/bounds.height()*full.height()));
-    sizeLabel_->setText(QString("原图：%1 × %2 px    裁剪目标：%3 × %4 px")
+    sizeLabel_->setText(QString(sharedPreview_?"原图：%1 × %2 px\n裁剪目标：%3 × %4 px"
+                                            :"原图：%1 × %2 px    裁剪目标：%3 × %4 px")
         .arg(originalSize_.width()).arg(originalSize_.height()).arg(width).arg(height));
     const bool valid=width>0 && height>0 && static_cast<qint64>(width)*height<=40000000;
     buttons_->button(QDialogButtonBox::Ok)->setEnabled(valid);
