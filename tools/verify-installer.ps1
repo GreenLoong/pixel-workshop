@@ -1,4 +1,4 @@
-param(
+﻿param(
     [Parameter(Mandatory=$true)][string]$Installer,
     [string]$OutputDirectory = "$PSScriptRoot/../build/installer-check-$(Get-Date -Format yyyyMMdd-HHmmss)"
 )

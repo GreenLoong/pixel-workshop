@@ -1,4 +1,4 @@
-param([string]$CacheDirectory = "$PSScriptRoot/../build/tools")
+﻿param([string]$CacheDirectory = "$PSScriptRoot/../build/tools")
 $ErrorActionPreference = 'Stop'
 $taskCache = (New-Item -ItemType Directory -Path $CacheDirectory -Force).FullName
 $taskCompilerSetup = Join-Path $taskCache 'innosetup-7.1.0-x64.exe'

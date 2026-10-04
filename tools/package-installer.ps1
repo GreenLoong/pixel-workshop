@@ -1,4 +1,4 @@
-param(
+﻿param(
     [Parameter(Mandatory=$true)][string]$PackageDirectory,
     [string]$CompilerPath = "$PSScriptRoot/../build/tools/InnoSetup/ISCC.exe",
     [string]$OutputDirectory = "$PSScriptRoot/../build/installers"
