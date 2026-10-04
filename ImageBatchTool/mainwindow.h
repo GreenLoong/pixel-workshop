@@ -33,6 +33,7 @@ private slots:
     void restoreOriginal();
     void showResizeDialog();
     void showToneDialog();
+    void showGeometryDialog();
     void showFullScreenPreview();
 
 private:

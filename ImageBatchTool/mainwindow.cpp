@@ -2,6 +2,7 @@
 #include "ui_mainwindow.h"
 #include "imageprocessing.h"
 #include "tonedialog.h"
+#include "geometrydialog.h"
 #include "sliderstyle.h"
 #include <exception>
 #include <stdexcept>
@@ -485,6 +486,16 @@ void MainWindow::setupMenus()
     QAction *exitAction = fileMenu->addAction("退出(&X)");
     exitAction->setShortcut(QKeySequence::Quit);
     connect(exitAction, &QAction::triggered, this, &MainWindow::close);
+    QMenu *edit = menuBar()->addMenu("编辑(&E)");
+    auto *geometry = edit->addAction("裁剪与旋转…");
+    geometry->setShortcut(QKeySequence("Ctrl+R"));
+    connect(geometry,&QAction::triggered,this,&MainWindow::showGeometryDialog);
+    auto *tone = edit->addAction("亮度与对比度…");
+    connect(tone,&QAction::triggered,this,&MainWindow::showToneDialog);
+    auto *size = edit->addAction("调整大小…");
+    connect(size,&QAction::triggered,this,&MainWindow::showResizeDialog);
+    auto *gray = edit->addAction("灰度化");
+    connect(gray,&QAction::triggered,this,&MainWindow::converToGrayscale);
 }
 
 // 应用整体风格
@@ -726,6 +737,13 @@ void MainWindow::showToneDialog()
     ToneDialog dialog(originalImage.toImage(), processingOptions_, this);
     if (dialog.exec() == QDialog::Accepted)
         applyProcessing(dialog.options());
+}
+
+void MainWindow::showGeometryDialog()
+{
+    if(originalImage.isNull()) return;
+    GeometryDialog dialog(originalImage.toImage(),processingOptions_,this);
+    if(dialog.exec()==QDialog::Accepted) applyProcessing(dialog.options());
 }
 
 void MainWindow::refreshImageUi()

@@ -1,4 +1,4 @@
-QDialog#ResizeDialog, QDialog#ToneDialog { background: transparent; border: 1px solid #cfd5df; border-radius: 12px; }
+QDialog { background: transparent; border: 1px solid #cfd5df; border-radius: 12px; }
 QWidget { font-family: "Microsoft YaHei UI", "Segoe UI"; font-size: 14px; color: #202020; }
 QWidget#contentPanel { background: #ffffff; border-top-left-radius: 11px; border-top-right-radius: 11px; }
 QWidget#footerPanel { background: #f7f8fa; border-bottom-left-radius: 11px; border-bottom-right-radius: 11px; }

@@ -55,6 +55,33 @@ int main()
         }
         require(original.at<cv::Vec3b>(0,0)==cv::Vec3b(255,0,0),"Input was modified");
         std::cout << "PASS: 16 processing combinations, identity, saturation, validation, original protection\n";
+        cv::Mat pattern(3,4,CV_8UC3);
+        for(int y=0;y<3;++y)for(int x=0;x<4;++x)pattern.at<cv::Vec3b>(y,x)=cv::Vec3b(x*40,y*50,9);
+        const auto saved=pattern.clone();
+        ImageProcessor::Options geometry;
+        geometry.flipHorizontal=true;
+        auto flipped=ImageProcessor::process(pattern,geometry);
+        require(flipped.at<cv::Vec3b>(0,0)==pattern.at<cv::Vec3b>(0,3),"Horizontal flip");
+        geometry={}; geometry.rotation=90;
+        auto rotated=ImageProcessor::process(pattern,geometry);
+        require(rotated.size()==cv::Size(3,4)
+            && rotated.at<cv::Vec3b>(0,2)==pattern.at<cv::Vec3b>(0,0),"90 degree rotation");
+        geometry.rotation=180;
+        require(ImageProcessor::process(pattern,geometry).at<cv::Vec3b>(0,0)
+            ==pattern.at<cv::Vec3b>(2,3),"180 degree rotation");
+        geometry={}; geometry.crop=cv::Rect2d(0.25,1.0/3,0.5,2.0/3);
+        auto cropped=ImageProcessor::process(pattern,geometry);
+        require(cropped.size()==cv::Size(2,2)
+            && cropped.at<cv::Vec3b>(0,0)==pattern.at<cv::Vec3b>(1,1),"Normalized crop");
+        geometry={}; geometry.rotation=45;
+        require(ImageProcessor::process(pattern,geometry).size()==cv::Size(5,5),"Expanded canvas");
+        require(cv::norm(pattern,saved,cv::NORM_INF)==0,"Geometry changed original");
+        geometry.crop=cv::Rect2d(-0.1,0,1,1);
+        bool cropRejected=false;
+        try { ImageProcessor::process(pattern,geometry); }
+        catch(const cv::Exception &) {cropRejected=true;}
+        require(cropRejected,"Invalid crop accepted");
+        std::cout<<"PASS: crop, flip, rotation, canvas expansion and input protection\n";
     } catch (const std::exception &error) {
         std::cerr << error.what() << '\n';
         return 1;

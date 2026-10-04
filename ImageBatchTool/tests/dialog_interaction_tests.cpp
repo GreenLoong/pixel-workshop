@@ -1,6 +1,9 @@
 #include "mainwindow.h"
 #include "tonedialog.h"
 #include "previewlabel.h"
+#include "geometrydialog.h"
+#include "selectionitem.h"
+#include <QDoubleSpinBox>
 #include <QApplication>
 #include <QDialogButtonBox>
 #include <QComboBox>
@@ -153,6 +156,19 @@ int main(int argc, char **argv)
         std::cout << "PASS: frameless style, instant preview, track jump, pressed drag, reset and cancel\n";
 
         const QString first = temp.path() + "/first";
+        GeometryDialog geometry(original, options);
+        geometry.show(); app.processEvents();
+        require(geometry.options().targetSize==options.targetSize,"Unchanged geometry reset size");
+        geometry.findChild<QDoubleSpinBox *>("rotationSpinBox")->setValue(90);
+        auto *selection=geometry.findChild<SelectionItem *>();
+        const auto bounds=selection->boundingRect().adjusted(8,8,-8,-8);
+        selection->setSelection(QRectF(bounds.width()*0.25,bounds.height()*0.25,
+                                      bounds.width()*0.5,bounds.height()*0.5));
+        require(geometry.options().rotation==90 && geometry.options().targetSize==cv::Size()
+            && std::abs(geometry.options().crop.width-0.5)<1e-9,
+            "Crop/rotation editor parameters");
+        geometry.reject();
+        std::cout<<"PASS: geometry editor preserves unchanged size and maps crop coordinates\n";
         const QString second = temp.path() + "/second";
         QDir().mkpath(first);
         QDir().mkpath(second);

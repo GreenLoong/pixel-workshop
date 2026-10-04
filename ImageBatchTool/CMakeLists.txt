@@ -32,6 +32,7 @@ qt_add_executable(ImageBatchTool
     tonedialog.h tonedialog.cpp
     dialogappearance.h dialogappearance.cpp
     sliderstyle.h
+    geometrydialog.h geometrydialog.cpp selectionitem.h selectionitem.cpp
     previewlabel.h
     previewlabel.cpp
     indicators.qrc
@@ -84,6 +85,7 @@ if(IMAGEBATCHTOOL_BUILD_TESTS)
         previewlabel.cpp previewlabel.h
         resizedialog.cpp resizedialog.h resizedialog.ui
         tonedialog.cpp tonedialog.h dialogappearance.cpp dialogappearance.h
+        geometrydialog.h geometrydialog.cpp selectionitem.h selectionitem.cpp
         imageprocessing.cpp imageprocessing.h imageprocessor.cpp imageprocessor.h
         indicators.qrc)
     set_target_properties(dialog_interaction_tests PROPERTIES AUTORCC ON)

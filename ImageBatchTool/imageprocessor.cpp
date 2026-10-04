@@ -21,19 +21,68 @@ cv::Mat ImageProcessor::process(const cv::Mat &rgb, const Options &options)
 {
     if (rgb.empty() || rgb.type() != CV_8UC3)
         CV_Error(cv::Error::StsBadArg, "Expected an 8-bit RGB image");
-    const cv::Size target = options.targetSize == cv::Size() ? rgb.size() : options.targetSize;
+    cv::Mat geometry = transformGeometry(rgb, options);
+    const cv::Size target = options.targetSize == cv::Size() ? geometry.size() : options.targetSize;
     if (target.width <= 0 || target.height <= 0
         || static_cast<long long>(target.width) * target.height > 40000000)
         CV_Error(cv::Error::StsBadArg, "Invalid output size (maximum 40 million pixels)");
     if (options.brightness < -100 || options.brightness > 100
         || !std::isfinite(options.contrast) || options.contrast < 0.5 || options.contrast > 2.0)
         CV_Error(cv::Error::StsBadArg, "Invalid tone parameters");
-    cv::Mat result = options.grayscale ? toGrayscale(rgb) : rgb;
-    if (target != rgb.size())
+    cv::Mat result = options.grayscale ? toGrayscale(geometry) : geometry;
+    if (target != geometry.size())
         result = resizeToSize(result, target);
     if (options.brightness != 0 || options.contrast != 1.0)
         result = adjustTone(result, options.brightness, options.contrast);
     return result.data == rgb.data ? result.clone() : result;
+}
+
+cv::Mat ImageProcessor::transformGeometry(const cv::Mat &source, const Options &options)
+{
+    if (source.empty() || !std::isfinite(options.rotation)
+        || options.rotation < -180 || options.rotation > 180)
+        CV_Error(cv::Error::StsBadArg, "Invalid rotation");
+    cv::Mat result = source.clone();
+    // 输出单独分配，避免翻转写入原图。
+    if (options.flipHorizontal || options.flipVertical) {
+        cv::flip(source, result, options.flipHorizontal && options.flipVertical ? -1
+                  : options.flipHorizontal ? 1 : 0);
+    }
+    const double angle = options.rotation;
+    if (angle == 90 || angle == -90 || std::abs(angle) == 180) {
+        cv::rotate(result, result, std::abs(angle) == 180 ? cv::ROTATE_180
+            : angle == 90 ? cv::ROTATE_90_CLOCKWISE : cv::ROTATE_90_COUNTERCLOCKWISE);
+    } else if (angle != 0) {
+        auto matrix = cv::getRotationMatrix2D(
+            cv::Point2f((result.cols - 1) / 2.0f, (result.rows - 1) / 2.0f), -angle, 1);
+        const double radians = angle * CV_PI / 180.0;
+        const int width = static_cast<int>(std::ceil(std::abs(result.cols * std::cos(radians))
+                                                + std::abs(result.rows * std::sin(radians))));
+        const int height = static_cast<int>(std::ceil(std::abs(result.rows * std::cos(radians))
+                                                 + std::abs(result.cols * std::sin(radians))));
+        if (static_cast<long long>(width) * height > 40000000)
+            CV_Error(cv::Error::StsBadArg, "Rotated canvas exceeds 40 million pixels");
+        matrix.at<double>(0,2) += (width - result.cols) / 2.0;
+        matrix.at<double>(1,2) += (height - result.rows) / 2.0;
+        cv::Mat rotated;
+        cv::warpAffine(result, rotated, matrix, cv::Size(width,height),
+            cv::INTER_LINEAR, cv::BORDER_CONSTANT, cv::Scalar::all(255));
+        result = rotated;
+    }
+    const auto &c = options.crop;
+    if (c != cv::Rect2d()) {
+        if (!std::isfinite(c.x) || !std::isfinite(c.y) || !std::isfinite(c.width)
+            || !std::isfinite(c.height) || c.x < 0 || c.y < 0
+            || c.width <= 0 || c.height <= 0 || c.x + c.width > 1.000001
+            || c.y + c.height > 1.000001)
+            CV_Error(cv::Error::StsBadArg, "Invalid normalized crop");
+        const int x = std::clamp(static_cast<int>(std::floor(c.x * result.cols)), 0, result.cols - 1);
+        const int y = std::clamp(static_cast<int>(std::floor(c.y * result.rows)), 0, result.rows - 1);
+        const int right = std::clamp(static_cast<int>(std::ceil((c.x+c.width) * result.cols)), x+1, result.cols);
+        const int bottom = std::clamp(static_cast<int>(std::ceil((c.y+c.height) * result.rows)), y+1, result.rows);
+        result = result(cv::Rect(x,y,right-x,bottom-y)).clone();
+    }
+    return result.data == source.data ? result.clone() : result;
 }
 
 // 灰度化
