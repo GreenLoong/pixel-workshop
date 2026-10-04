@@ -1,10 +1,10 @@
-#include "mainwindow.h"
-#include "tonedialog.h"
-#include "previewlabel.h"
-#include "geometrydialog.h"
-#include "selectionitem.h"
-#include "backgrounddialog.h"
-#include "batchdialog.h"
+#include "presentation/windows/mainwindow.h"
+#include "presentation/dialogs/tonedialog.h"
+#include "presentation/widgets/previewlabel.h"
+#include "presentation/dialogs/geometrydialog.h"
+#include "presentation/widgets/selectionitem.h"
+#include "presentation/dialogs/backgrounddialog.h"
+#include "presentation/dialogs/batchdialog.h"
 #include <QFontDatabase>
 #include <QLineEdit>
 #include <QLabel>
@@ -31,7 +31,7 @@
 #include <QGraphicsSceneHoverEvent>
 #include <QCheckBox>
 #include <QRadioButton>
-#include "editorpage.h"
+#include "presentation/pages/editorpage.h"
 #include <QStackedWidget>
 #include <QColorDialog>
 #include <QElapsedTimer>

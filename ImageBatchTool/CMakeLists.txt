@@ -2,133 +2,91 @@ cmake_minimum_required(VERSION 3.19)
 
 set(CMAKE_USER_MAKE_RULES_OVERRIDE_CXX "${CMAKE_CURRENT_SOURCE_DIR}/cmake/MSVCDependencies.cmake")
 project(ImageBatchTool LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Work around a locally reproduced CMake crash when Qt reads the cached
-# windeployqt path on reconfigure. Let Qt locate the deployment tool again.
+# Qt 再次配置时重新查找部署工具，避免本机复现的缓存路径读取崩溃。
 if(WIN32)
     unset(WINDEPLOYQT_EXECUTABLE CACHE)
 endif()
-
-# Svg 用于加载样式表中的单选框和复选框图标。
 find_package(Qt6 6.5 REQUIRED COMPONENTS Core Widgets Svg Concurrent)
-#core:cv::Mat 等基础数据结构。
-#imgproc：灰度转换、缩放等图像处理。
-#imgcodecs：图片读取和保存。
-#dnn：本地 PPHumanSeg ONNX 人像分割推理。
 find_package(OpenCV 4.10 REQUIRED COMPONENTS core imgproc imgcodecs dnn)
-
 message(STATUS "OpenCV version: ${OpenCV_VERSION}")
-
 qt_standard_project_setup()
 
-qt_add_executable(ImageBatchTool
-    WIN32 MACOSX_BUNDLE
-    main.cpp
-    mainwindow.cpp
-    mainwindow.h
-    mainwindow.ui
-    editorpage.cpp editorpage.h
-    imageprocessor.h
-    imageprocessor.cpp
-    backgroundprocessor.cpp backgrounddialog.cpp backgrounddialog.h
-    humansegmentation.cpp humansegmentation.h
-    batchjob.cpp batchjob.h batchdialog.cpp batchdialog.h imagefiles.cpp imagefiles.h
-    imageprocessing.h imageprocessing.cpp
-    tonedialog.h tonedialog.cpp
-    dialogappearance.h dialogappearance.cpp
-    sliderstyle.h
-    geometrydialog.h geometrydialog.cpp selectionitem.h selectionitem.cpp
-    previewlabel.h
-    previewlabel.cpp
-    indicators.qrc
-    resizedialog.h resizedialog.cpp resizedialog.ui
-)
+# 源文件只在所属模块列举一次，应用和测试链接同一实现。
+add_library(pixel_domain STATIC
+    src/domain/imageprocessor.cpp src/domain/imageprocessor.h
+    src/domain/backgroundprocessor.cpp
+    src/domain/humansegmentation.cpp src/domain/humansegmentation.h)
+set_target_properties(pixel_domain PROPERTIES AUTOMOC OFF AUTOUIC OFF)
+target_include_directories(pixel_domain PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src" ${OpenCV_INCLUDE_DIRS})
+target_link_libraries(pixel_domain PUBLIC ${OpenCV_LIBS})
 
-set_target_properties(ImageBatchTool PROPERTIES AUTORCC ON)
+add_library(pixel_infrastructure STATIC
+    src/infrastructure/imagefiles.cpp src/infrastructure/imagefiles.h)
+target_link_libraries(pixel_infrastructure PUBLIC pixel_domain Qt::Gui)
+add_library(pixel_application STATIC
+    src/application/imageprocessing.cpp src/application/imageprocessing.h
+    src/application/batchjob.cpp src/application/batchjob.h)
+target_link_libraries(pixel_application PUBLIC pixel_infrastructure)
+add_library(pixel_presentation STATIC
+    src/presentation/windows/mainwindow.cpp src/presentation/windows/mainwindow.h src/presentation/windows/mainwindow.ui
+    src/presentation/pages/editorpage.cpp src/presentation/pages/editorpage.h
+    src/presentation/dialogs/backgrounddialog.cpp src/presentation/dialogs/backgrounddialog.h
+    src/presentation/dialogs/batchdialog.cpp src/presentation/dialogs/batchdialog.h
+    src/presentation/dialogs/geometrydialog.cpp src/presentation/dialogs/geometrydialog.h
+    src/presentation/dialogs/resizedialog.cpp src/presentation/dialogs/resizedialog.h src/presentation/dialogs/resizedialog.ui
+    src/presentation/dialogs/tonedialog.cpp src/presentation/dialogs/tonedialog.h
+    src/presentation/widgets/dialogappearance.cpp src/presentation/widgets/dialogappearance.h
+    src/presentation/widgets/previewlabel.cpp src/presentation/widgets/previewlabel.h
+    src/presentation/widgets/selectionitem.cpp src/presentation/widgets/selectionitem.h
+    src/presentation/widgets/sliderstyle.h)
+target_link_libraries(pixel_presentation PUBLIC pixel_application Qt::Widgets Qt::Svg Qt::Concurrent)
+
+# 对象库确保资源注册代码进入每个可执行文件，不被静态链接器裁掉。
+add_library(pixel_resources OBJECT resources/indicators.qrc)
+set_target_properties(pixel_resources PROPERTIES AUTORCC ON AUTOMOC OFF AUTOUIC OFF)
+target_link_libraries(pixel_resources PRIVATE Qt::Core)
+if(MSVC)
+    foreach(module IN ITEMS pixel_domain pixel_infrastructure pixel_application pixel_presentation)
+        target_compile_options(${module} PRIVATE /utf-8)
+    endforeach()
+endif()
+qt_add_executable(ImageBatchTool WIN32 MACOSX_BUNDLE src/main.cpp)
+target_link_libraries(ImageBatchTool PRIVATE pixel_presentation pixel_resources)
 if(WIN32)
     enable_language(RC)
-    target_sources(ImageBatchTool PRIVATE appicon.rc)
+    target_sources(ImageBatchTool PRIVATE resources/appicon.rc)
+    target_include_directories(ImageBatchTool PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/resources")
 endif()
-
-target_include_directories(ImageBatchTool PRIVATE
-    ${OpenCV_INCLUDE_DIRS}
-)
-
-target_link_libraries(ImageBatchTool
-    PRIVATE
-        Qt::Core
-        Qt::Widgets
-        Qt::Svg
-        Qt::Concurrent
-        ${OpenCV_LIBS}
-)
-
 install(TARGETS ImageBatchTool
-    BUNDLE  DESTINATION .
+    BUNDLE DESTINATION .
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-)
-
-qt_generate_deploy_app_script(
-    TARGET ImageBatchTool
-    OUTPUT_SCRIPT deploy_script
-    NO_UNSUPPORTED_PLATFORM_ERROR
-)
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
+qt_generate_deploy_app_script(TARGET ImageBatchTool OUTPUT_SCRIPT deploy_script NO_UNSUPPORTED_PLATFORM_ERROR)
 install(SCRIPT ${deploy_script})
 
 option(IMAGEBATCHTOOL_BUILD_TESTS "Build image-processing checks" OFF)
 if(IMAGEBATCHTOOL_BUILD_TESTS)
     enable_testing()
-    add_executable(imageprocessor_tests tests/imageprocessor_tests.cpp imageprocessor.cpp backgroundprocessor.cpp humansegmentation.cpp)
-    set_target_properties(imageprocessor_tests PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)
-    target_compile_features(imageprocessor_tests PRIVATE cxx_std_17)
-    if(MSVC)
-        target_compile_options(imageprocessor_tests PRIVATE /utf-8)
-    endif()
-    target_include_directories(imageprocessor_tests PRIVATE ${OpenCV_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR})
-    target_link_libraries(imageprocessor_tests PRIVATE ${OpenCV_LIBS})
-    add_test(NAME imageprocessor_tests COMMAND imageprocessor_tests)
-
-    qt_add_executable(dialog_interaction_tests
-        tests/dialog_interaction_tests.cpp
-        mainwindow.cpp mainwindow.h mainwindow.ui
-        editorpage.cpp editorpage.h
-        previewlabel.cpp previewlabel.h
-        resizedialog.cpp resizedialog.h resizedialog.ui
-        tonedialog.cpp tonedialog.h dialogappearance.cpp dialogappearance.h
-        geometrydialog.h geometrydialog.cpp selectionitem.h selectionitem.cpp
-        imageprocessing.cpp imageprocessing.h imageprocessor.cpp imageprocessor.h
-        backgroundprocessor.cpp backgrounddialog.cpp backgrounddialog.h
-        humansegmentation.cpp humansegmentation.h
-        batchjob.cpp batchjob.h batchdialog.cpp batchdialog.h imagefiles.cpp imagefiles.h
-        indicators.qrc)
-    set_target_properties(dialog_interaction_tests PROPERTIES AUTORCC ON)
-    target_compile_features(dialog_interaction_tests PRIVATE cxx_std_17)
-    if(MSVC)
-        target_compile_options(dialog_interaction_tests PRIVATE /utf-8)
-    endif()
-    target_include_directories(dialog_interaction_tests PRIVATE ${OpenCV_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR})
-    target_link_libraries(dialog_interaction_tests PRIVATE Qt::Widgets Qt::Svg Qt::Concurrent ${OpenCV_LIBS})
-    add_test(NAME dialog_interaction_tests COMMAND dialog_interaction_tests)
-    qt_add_executable(batch_tests tests/batch_tests.cpp batchjob.cpp batchjob.h imageprocessing.cpp imagefiles.cpp imageprocessor.cpp backgroundprocessor.cpp humansegmentation.cpp indicators.qrc)
-    set_target_properties(batch_tests PROPERTIES AUTORCC ON)
-    target_compile_features(batch_tests PRIVATE cxx_std_17)
-    if(MSVC)
-        target_compile_options(batch_tests PRIVATE /utf-8)
-    endif()
-    target_include_directories(batch_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${OpenCV_INCLUDE_DIRS})
-    target_link_libraries(batch_tests PRIVATE Qt::Widgets ${OpenCV_LIBS})
-    add_test(NAME batch_tests COMMAND batch_tests)
-    qt_add_executable(segmentation_tests tests/segmentation_tests.cpp imageprocessing.cpp imageprocessor.cpp backgroundprocessor.cpp humansegmentation.cpp indicators.qrc)
-    set_target_properties(segmentation_tests PROPERTIES AUTORCC ON)
-    target_compile_features(segmentation_tests PRIVATE cxx_std_17)
-    if(MSVC)
-        target_compile_options(segmentation_tests PRIVATE /utf-8)
-    endif()
-    target_include_directories(segmentation_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${OpenCV_INCLUDE_DIRS})
-    target_link_libraries(segmentation_tests PRIVATE Qt::Gui ${OpenCV_LIBS})
-    add_test(NAME segmentation_tests COMMAND segmentation_tests)
-    # 本机验证目录含部署产生的 qt.conf，测试显式使用开发环境的离屏插件。
+    add_executable(imageprocessor_tests tests/imageprocessor_tests.cpp)
+    set_target_properties(imageprocessor_tests PROPERTIES AUTOMOC OFF AUTOUIC OFF)
+    target_link_libraries(imageprocessor_tests PRIVATE pixel_domain)
+    qt_add_executable(dialog_interaction_tests tests/dialog_interaction_tests.cpp)
+    target_link_libraries(dialog_interaction_tests PRIVATE pixel_presentation pixel_resources)
+    qt_add_executable(batch_tests tests/batch_tests.cpp)
+    target_link_libraries(batch_tests PRIVATE pixel_application pixel_resources Qt::Widgets)
+    qt_add_executable(segmentation_tests tests/segmentation_tests.cpp)
+    target_link_libraries(segmentation_tests PRIVATE pixel_application pixel_resources)
+    foreach(test IN ITEMS imageprocessor_tests dialog_interaction_tests batch_tests segmentation_tests)
+        if(MSVC)
+            target_compile_options(${test} PRIVATE /utf-8)
+        endif()
+        add_test(NAME ${test} COMMAND ${test})
+    endforeach()
+    # qt.conf 可能指向部署插件；交互测试明确使用开发环境离屏插件。
     get_target_property(_qt_core_library Qt::Core IMPORTED_LOCATION_RELEASE)
     get_filename_component(_qt_bin_directory "${_qt_core_library}" DIRECTORY)
     get_filename_component(_qt_install_directory "${_qt_bin_directory}" DIRECTORY)

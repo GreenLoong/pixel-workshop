@@ -28,8 +28,8 @@ foreach ($taskFile in @('Qt6Core.dll','Qt6Gui.dll','Qt6Widgets.dll','platforms/q
 [IO.File]::WriteAllText((Join-Path $taskPackage.FullName 'qt.conf'), "[Paths]`nPlugins=.`n", [Text.UTF8Encoding]::new($false))
 Copy-Item -LiteralPath "$PSScriptRoot/../docs/Windows构建与交付.md" -Destination (Join-Path $taskPackage.FullName '使用说明.md')
 New-Item -ItemType Directory -Path (Join-Path $taskPackage.FullName 'licenses') | Out-Null
-Copy-Item -LiteralPath "$PSScriptRoot/../ImageBatchTool/models/PPHumanSeg-LICENSE.txt" -Destination (Join-Path $taskPackage.FullName 'licenses')
-Copy-Item -LiteralPath "$PSScriptRoot/../ImageBatchTool/models/PPHumanSeg-NOTICE.txt" -Destination (Join-Path $taskPackage.FullName 'licenses')
+Copy-Item -LiteralPath "$PSScriptRoot/../ImageBatchTool/resources/models/PPHumanSeg-LICENSE.txt" -Destination (Join-Path $taskPackage.FullName 'licenses')
+Copy-Item -LiteralPath "$PSScriptRoot/../ImageBatchTool/resources/models/PPHumanSeg-NOTICE.txt" -Destination (Join-Path $taskPackage.FullName 'licenses')
 Compress-Archive -LiteralPath $taskPackage.FullName -DestinationPath ($taskPackage.FullName + '.zip')
 Write-Output "Package: $($taskPackage.FullName)"
 Write-Output "Archive: $($taskPackage.FullName).zip"

@@ -1,4 +1,4 @@
-#include "imageprocessing.h"
+#include "application/imageprocessing.h"
 #include <QCoreApplication>
 #include <QImage>
 #include <QDir>

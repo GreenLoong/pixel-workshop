@@ -1,4 +1,4 @@
-#include "imageprocessor.h"
+#include "domain/imageprocessor.h"
 
 #include <iostream>
 #include <limits>

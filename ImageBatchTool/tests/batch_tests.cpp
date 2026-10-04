@@ -1,5 +1,5 @@
-#include "batchjob.h"
-#include "imagefiles.h"
+#include "application/batchjob.h"
+#include "infrastructure/imagefiles.h"
 #include <QApplication>
 #include <QCryptographicHash>
 #include <QDir>
