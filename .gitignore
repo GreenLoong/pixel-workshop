@@ -16,6 +16,9 @@ compile_commands.json
 .qtc_clangd/
 .qt/
 
+# Qt installer diagnostic output
+aqtinstall.log
+
 # Compiled files
 *.obj
 *.o

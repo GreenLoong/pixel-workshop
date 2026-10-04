@@ -19,7 +19,8 @@ if ($taskVersion -notmatch '^\d+\.\d+\.\d+$') { throw 'Build the executable with
 $taskCommit = & git -C "$PSScriptRoot/.." rev-parse HEAD
 if ($LASTEXITCODE -ne 0) { throw 'Cannot determine source revision.' }
 $taskDirty = & git -C "$PSScriptRoot/.." status --porcelain --untracked-files=normal
-if ($LASTEXITCODE -ne 0 -or $taskDirty) { throw 'Commit source changes before creating a delivery package.' }
+if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect source revision status.' }
+if ($taskDirty) { throw ('Commit source changes before creating a delivery package:'+ [Environment]::NewLine + ($taskDirty -join [Environment]::NewLine)) }
 $taskQtVersion = & (Join-Path $QtDirectory 'bin/qmake.exe') -query QT_VERSION
 if ($LASTEXITCODE -ne 0) { throw 'Cannot determine Qt version.' }
 if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
