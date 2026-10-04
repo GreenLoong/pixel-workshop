@@ -27,6 +27,7 @@
 #include <QTimer>
 #include <QToolButton>
 #include <QWheelEvent>
+#include <QGraphicsSceneHoverEvent>
 #include <iostream>
 #include <stdexcept>
 
@@ -174,6 +175,17 @@ int main(int argc, char **argv)
         require(geometry.options().rotation==90 && geometry.options().targetSize==cv::Size()
             && std::abs(geometry.options().crop.width-0.5)<1e-9,
             "Crop/rotation editor parameters");
+        const auto crop = selection->selection();
+        for (const auto entry : {std::pair<QPointF,Qt::CursorShape>{crop.center(),Qt::SizeAllCursor},
+             {QPointF(crop.left(),crop.center().y()),Qt::SizeHorCursor},
+             {QPointF(crop.center().x(),crop.top()),Qt::SizeVerCursor},
+             {crop.topLeft(),Qt::SizeFDiagCursor}, {crop.topRight(),Qt::SizeBDiagCursor}}) {
+            QGraphicsSceneHoverEvent hover(QEvent::GraphicsSceneHoverMove);
+            hover.setPos(entry.first); selection->scene()->sendEvent(selection,&hover);
+            require(selection->cursor().shape()==entry.second,"Crop edge/corner cursor incorrect");
+        }
+        require(geometry.findChild<PreviewLabel *>("geometryPreview")->dragMode()==QGraphicsView::NoDrag,
+                "Crop selection is competing with hand panning");
         geometry.reject();
         std::cout<<"PASS: geometry editor preserves unchanged size and maps crop coordinates\n";
         const QString second = temp.path() + "/second";

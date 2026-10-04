@@ -17,10 +17,14 @@ public:
 signals:
     void selectionChanged(QRectF rect);
 protected:
+    void hoverMoveEvent(QGraphicsSceneHoverEvent *) override;
+    void hoverLeaveEvent(QGraphicsSceneHoverEvent *) override;
     void mousePressEvent(QGraphicsSceneMouseEvent *) override;
     void mouseMoveEvent(QGraphicsSceneMouseEvent *) override;
     void mouseReleaseEvent(QGraphicsSceneMouseEvent *) override;
 private:
+    int edgesAt(QPointF point) const;
+    double hitTolerance() const;
     QRectF bounds_, rect_, pressRect_;
     QPointF pressPoint_;
     double ratio_ = 0;

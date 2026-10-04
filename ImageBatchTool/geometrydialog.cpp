@@ -94,6 +94,7 @@ void GeometryDialog::updateImage()
         auto base=working_; base.crop={}; base.targetSize={};
         base.background=ImageProcessor::BackgroundMode::None;
         preview_->setImage(QPixmap::fromImage(ImageProcessing::processImage(previewSource_,base)));
+        preview_->setDragMode(QGraphicsView::NoDrag);
         selection_->setBounds(preview_->sceneRect());
         selection_->setRatio(ratio_->currentData().toDouble());
         preview_->fitToWindow(); updateSize();

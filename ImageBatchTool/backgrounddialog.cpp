@@ -20,6 +20,29 @@
 #include <QIcon>
 #include <QStandardItemModel>
 #include <exception>
+#include <QPainter>
+
+BrushPreview::BrushPreview(QWidget *parent):PreviewLabel(parent)
+{
+    setMouseTracking(true);
+    viewport()->setMouseTracking(true);
+}
+void BrushPreview::paintEvent(QPaintEvent *event)
+{
+    PreviewLabel::paintEvent(event);
+    if (!painting || !pointerInside_ || sceneRect().isEmpty()) return;
+    QPainter p(viewport());
+    p.setRenderHint(QPainter::Antialiasing);
+    const double r = radius * std::min(sceneRect().width(),sceneRect().height()) * std::abs(transform().m11());
+    // 在视口上画笔圈，不受系统光标尺寸上限影响，随图片缩放同步变化。
+    p.setPen(QPen(Qt::black,3)); p.setBrush(Qt::NoBrush); p.drawEllipse(QPointF(pointer_),r,r);
+    p.setPen(QPen(Qt::white,1)); p.drawEllipse(QPointF(pointer_),r,r);
+}
+void BrushPreview::leaveEvent(QEvent *event)
+{
+    pointerInside_=false; viewport()->update();
+    PreviewLabel::leaveEvent(event);
+}
 
 void BrushPreview::append(QPoint point) {
     const QRectF b=sceneRect();
@@ -40,6 +63,9 @@ void BrushPreview::mousePressEvent(QMouseEvent *e) {
     PreviewLabel::mousePressEvent(e);
 }
 void BrushPreview::mouseMoveEvent(QMouseEvent *e) {
+    pointer_=e->position().toPoint();pointerInside_=viewport()->rect().contains(pointer_);
+    if(painting)viewport()->setCursor(Qt::CrossCursor);
+    viewport()->update();
     if(drawing_){append(e->position().toPoint());e->accept();return;}
     PreviewLabel::mouseMoveEvent(e);
 }
@@ -109,7 +135,8 @@ BackgroundDialog::BackgroundDialog(const QImage &original,const ImageProcessor::
         if(dirty_){startPreview();return;}
         const auto result=watcher_.result();
         if(result.error.isEmpty()) {
-            if(!preview_->painting && !selection_->isVisible())preview_->setImage(QPixmap::fromImage(result.image));
+            if(!selection_->isVisible())preview_->setImage(QPixmap::fromImage(result.image));
+            preview_->setDragMode(preview_->painting || selection_->isVisible() ? QGraphicsView::NoDrag : QGraphicsView::ScrollHandDrag);
             message_->setText(working_.segmentation==ImageProcessor::SegmentationMethod::Human
                 ? "人像识别已更新，可用画笔修正边缘；确定后应用到完整图片。"
                 : "区域分割已更新。范围框外作为背景，主体必须完整包含在框内。");
@@ -120,7 +147,7 @@ BackgroundDialog::BackgroundDialog(const QImage &original,const ImageProcessor::
         selection_->setVisible(index==0 && working_.segmentation==ImageProcessor::SegmentationMethod::Region);
         preview_->painting=index==1||index==2;preview_->foreground=index==1;
         if(index!=3)preview_->setImage(QPixmap::fromImage(base_));
-        preview_->setDragMode(preview_->painting?QGraphicsView::NoDrag:QGraphicsView::ScrollHandDrag);
+        preview_->setDragMode(preview_->painting || selection_->isVisible()?QGraphicsView::NoDrag:QGraphicsView::ScrollHandDrag);
         preview_->viewport()->setCursor(preview_->painting?Qt::CrossCursor:Qt::ArrowCursor);
         schedulePreview();
     };

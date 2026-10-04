@@ -4,13 +4,49 @@
 #include <QPainterPath>
 #include <QPen>
 #include <QCursor>
+#include <QGraphicsScene>
+#include <QGraphicsView>
+#include <QGraphicsSceneHoverEvent>
 #include <algorithm>
 
 SelectionItem::SelectionItem(QGraphicsItem *parent) : QGraphicsObject(parent)
 {
     setAcceptedMouseButtons(Qt::LeftButton);
     setZValue(10);
-    setCursor(QCursor(Qt::SizeAllCursor));
+    setAcceptHoverEvents(true);
+    setCursor(QCursor(Qt::ArrowCursor));
+}
+double SelectionItem::hitTolerance() const
+{
+    const auto views = scene() ? scene()->views() : QList<QGraphicsView *>();
+    return 8.0 / (views.isEmpty() ? 1.0 : std::max(.01, std::abs(views.first()->transform().m11())));
+}
+int SelectionItem::edgesAt(QPointF p) const
+{
+    const double t = hitTolerance();
+    if (!rect_.adjusted(-t,-t,t,t).contains(p)) return 0;
+    int edges = 0;
+    if (std::abs(p.x()-rect_.left()) < t) edges |= 1;
+    else if (std::abs(p.x()-rect_.right()) < t) edges |= 2;
+    if (std::abs(p.y()-rect_.top()) < t) edges |= 4;
+    else if (std::abs(p.y()-rect_.bottom()) < t) edges |= 8;
+    return edges;
+}
+void SelectionItem::hoverMoveEvent(QGraphicsSceneHoverEvent *event)
+{
+    const int edges = edgesAt(event->pos());
+    Qt::CursorShape cursor = rect_.contains(event->pos()) ? Qt::SizeAllCursor : Qt::ArrowCursor;
+    if ((edges & 3) && (edges & 12))
+        cursor = edges == 5 || edges == 10 ? Qt::SizeFDiagCursor : Qt::SizeBDiagCursor;
+    else if (edges & 3) cursor = Qt::SizeHorCursor;
+    else if (edges & 12) cursor = Qt::SizeVerCursor;
+    setCursor(QCursor(cursor));
+    event->accept();
+}
+void SelectionItem::hoverLeaveEvent(QGraphicsSceneHoverEvent *event)
+{
+    setCursor(QCursor(Qt::ArrowCursor));
+    QGraphicsObject::hoverLeaveEvent(event);
 }
 QRectF SelectionItem::boundingRect() const { return bounds_.adjusted(-8,-8,8,8); }
 void SelectionItem::setBounds(const QRectF &bounds)
@@ -56,17 +92,13 @@ void SelectionItem::paint(QPainter *p, const QStyleOptionGraphicsItem *, QWidget
     for (auto point : {rect_.topLeft(),rect_.topRight(),rect_.bottomLeft(),rect_.bottomRight(),
         QPointF(rect_.center().x(),rect_.top()),QPointF(rect_.center().x(),rect_.bottom()),
         QPointF(rect_.left(),rect_.center().y()),QPointF(rect_.right(),rect_.center().y())})
-        p->drawRect(QRectF(point-QPointF(5,5),QSizeF(10,10)));
+        p->drawRect(QRectF(point-QPointF(hitTolerance()/2,hitTolerance()/2),QSizeF(hitTolerance(),hitTolerance())));
 }
 void SelectionItem::mousePressEvent(QGraphicsSceneMouseEvent *event)
 {
     const QPointF point = event->pos();
-    const double tolerance = 12;
-    edges_ = 0;
-    if (std::abs(point.x()-rect_.left())<tolerance) edges_ |= 1;
-    if (std::abs(point.x()-rect_.right())<tolerance) edges_ |= 2;
-    if (std::abs(point.y()-rect_.top())<tolerance) edges_ |= 4;
-    if (std::abs(point.y()-rect_.bottom())<tolerance) edges_ |= 8;
+    const double tolerance = hitTolerance();
+    edges_ = edgesAt(point);
     if (!rect_.adjusted(-tolerance,-tolerance,tolerance,tolerance).contains(point)) {
         event->ignore(); return;
     }

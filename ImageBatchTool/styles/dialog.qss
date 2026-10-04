@@ -1,4 +1,6 @@
-QDialog { background: transparent; border: 1px solid #cfd5df; border-radius: 12px; }
+QDialog#ResizeDialog, QDialog#ToneDialog, QDialog#GeometryDialog, QDialog#BackgroundDialog, QDialog#BatchDialog { background: transparent; border: 1px solid #cfd5df; border-radius: 12px; }
+QColorDialog, QColorDialog QWidget { background-color: #ffffff; color: #202020; }
+QColorDialog QSpinBox, QColorDialog QLineEdit { padding: 3px 6px; min-height: 20px; border-radius: 4px; }
 QWidget { font-family: "Microsoft YaHei UI", "Segoe UI"; font-size: 14px; color: #202020; }
 QWidget#contentPanel { background: #ffffff; border-top-left-radius: 11px; border-top-right-radius: 11px; }
 QWidget#footerPanel { background: #f7f8fa; border-bottom-left-radius: 11px; border-bottom-right-radius: 11px; }
