@@ -15,10 +15,10 @@ $taskShortcutDirectory = Join-Path ([Environment]::GetFolderPath('Programs')) 'P
 if (Test-Path -LiteralPath $taskShortcutDirectory) { throw 'Existing Pixel Workshop shortcuts must not be changed by installer verification.' }
 if (Test-Path -LiteralPath $OutputDirectory) { throw 'Choose a new installer verification directory.' }
 $taskRoot = (New-Item -ItemType Directory -Path $OutputDirectory).FullName
-$taskApplication = Join-Path $taskRoot 'installed application'
 $taskTemporaryRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\') + '\'
 $taskTemporary = Join-Path $taskTemporaryRoot ('pixel-workshop-install-check-' + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $taskTemporary | Out-Null
+$taskApplication = Join-Path $taskTemporary 'installed application'
 $taskSetup = Join-Path $taskTemporary 'setup.exe'
 Copy-Item -LiteralPath $taskInstaller -Destination $taskSetup
 
@@ -62,5 +62,9 @@ try {
 } finally {
     $taskResolved = [IO.Path]::GetFullPath($taskTemporary)
     if (-not $taskResolved.StartsWith($taskTemporaryRoot, [StringComparison]::OrdinalIgnoreCase)) { throw 'Installer temporary path escaped the temporary directory.' }
-    Remove-Item -LiteralPath $taskResolved -Recurse -Force
+    if (Test-Path -LiteralPath (Join-Path $taskApplication 'ImageBatchTool.exe')) {
+        Write-Warning "Verification did not finish uninstalling; preserve $taskResolved for diagnosis."
+    } else {
+        Remove-Item -LiteralPath $taskResolved -Recurse -Force
+    }
 }
