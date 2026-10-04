@@ -40,6 +40,10 @@ qt_add_executable(ImageBatchTool
 )
 
 set_target_properties(ImageBatchTool PROPERTIES AUTORCC ON)
+if(WIN32)
+    enable_language(RC)
+    target_sources(ImageBatchTool PRIVATE appicon.rc)
+endif()
 
 target_include_directories(ImageBatchTool PRIVATE
     ${OpenCV_INCLUDE_DIRS}

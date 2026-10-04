@@ -14,4 +14,7 @@
  <qresource prefix="/styles">
   <file alias="dialog.qss">styles/dialog.qss</file>
  </qresource>
+ <qresource prefix="/app">
+  <file alias="icon.png">icons/app-icon.png</file>
+ </qresource>
 </RCC>

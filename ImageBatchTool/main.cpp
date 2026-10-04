@@ -4,6 +4,7 @@
 #include <QFont>
 #include <QFontDatabase>
 #include <QStyleFactory>
+#include <QIcon>
 
 namespace
 {
@@ -44,6 +45,7 @@ int main(int argc, char *argv[])
     QApplication::setApplicationName("图像处理工具");
     QApplication::setApplicationDisplayName("图像处理工具");
     QApplication::setOrganizationName("ImageBatchTool");
+    QApplication::setWindowIcon(QIcon(":/app/icon.png"));
 
     applyPreferredFont();
 
