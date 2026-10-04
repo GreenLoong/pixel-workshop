@@ -1,0 +1,208 @@
+#include "editorpage.h"
+#include "geometrydialog.h"
+#include "tonedialog.h"
+#include "resizedialog.h"
+#include "backgrounddialog.h"
+#include "dialogappearance.h"
+#include "imageprocessing.h"
+#include "selectionitem.h"
+#include <QAbstractButton>
+#include <QButtonGroup>
+#include <QDialogButtonBox>
+#include <QDoubleSpinBox>
+#include <QFile>
+#include <QHBoxLayout>
+#include <QKeyEvent>
+#include <QLabel>
+#include <QPushButton>
+#include <QScrollArea>
+#include <QSlider>
+#include <QSpinBox>
+#include <QComboBox>
+#include <QSignalBlocker>
+#include <QVBoxLayout>
+#include <QShortcut>
+#include <exception>
+
+EditorPage::EditorPage(QWidget *parent):QWidget(parent),host_(new QWidget(this)),
+    body_(new QVBoxLayout(host_)),modes_(new QButtonGroup(this))
+{
+    setObjectName("editorPage");
+    QFile sheet(":/styles/dialog.qss");
+    if(sheet.open(QIODevice::ReadOnly))setStyleSheet(QString::fromUtf8(sheet.readAll())+QStringLiteral(R"(
+        QWidget#editorPage { background:#f2f3f5; }
+        QWidget#contentPanel { background:transparent; }
+        QPushButton[modeButton="true"] { border:0; border-radius:7px; background:transparent; padding:8px 14px; }
+        QPushButton[modeButton="true"]:hover { background:#e4e9f0; }
+        QPushButton[modeButton="true"]:checked { background:#e0e9ff; color:#2458d6; }
+        QScrollArea { background:white; border:1px solid #e2e6ed; border-radius:10px; }
+        QScrollArea > QWidget > QWidget { background:white; }
+        QScrollBar:vertical { width:8px; background:#f5f6f8; }
+        QScrollBar::handle:vertical { background:#ccd3df; border-radius:4px; min-height:30px; }
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }
+        QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background:transparent; }
+    )"));
+    auto *root=new QVBoxLayout(this);root->setContentsMargins(20,10,20,16);root->setSpacing(14);
+    auto *top=new QHBoxLayout;root->addLayout(top);
+    name_=new QLabel(this);name_->setObjectName("editorFileName");top->addWidget(name_,1);
+    name_->setSizePolicy(QSizePolicy::Ignored,QSizePolicy::Preferred);
+    auto *reset=new QPushButton("恢复原图",this);reset->setObjectName("resetEditorButton");top->addWidget(reset);
+    connect(reset,&QPushButton::clicked,this,[this]{record();draft_={};mode_=Crop;buildPanel();record();});
+    auto *cancel=new QPushButton("取消",this);cancel->setObjectName("cancelEditButton");
+    done_=new QPushButton("完成编辑",this);done_->setObjectName("confirmButton");
+    top->addWidget(cancel);top->addWidget(done_);
+    auto *toolbar=new QHBoxLayout;root->addLayout(toolbar);
+    const auto tool=[&](const QString &text,const QString &name,auto callback) {
+        auto *b=new QPushButton(text,this);b->setObjectName(name);b->setAutoDefault(false);
+        b->setProperty("modeButton",true);toolbar->addWidget(b);connect(b,&QPushButton::clicked,this,callback);return b;
+    };
+    tool("−","editorZoomOut",[this]{if(preview_)preview_->zoomOut();});
+    zoom_=new QLabel("100%",this);zoom_->setFixedWidth(52);zoom_->setAlignment(Qt::AlignCenter);toolbar->addWidget(zoom_);
+    tool("+","editorZoomIn",[this]{if(preview_)preview_->zoomIn();});
+    tool("适应 / 1:1","editorFit",[this]{if(preview_)preview_->toggleFitActual();});
+    undo_=tool("撤销","editorUndo",[this]{undo();});redo_=tool("重做","editorRedo",[this]{redo();});
+    toolbar->addStretch();
+    int id=0;
+    for(const QString &title:{QString("裁剪旋转"),QString("颜色光线"),QString("尺寸"),QString("背景")}) {
+        auto *b=new QPushButton(title,this);b->setObjectName(QString("editorMode%1").arg(id));
+        b->setProperty("modeButton",true);b->setCheckable(true);modes_->addButton(b,id++);toolbar->addWidget(b);
+    }
+    body_->setContentsMargins(0,0,0,0);root->addWidget(host_,1);
+    connect(modes_,&QButtonGroup::idClicked,this,[this](int id){selectMode(static_cast<Mode>(id));});
+    connect(cancel,&QPushButton::clicked,this,&EditorPage::cancelled);
+    connect(done_,&QPushButton::clicked,this,[this]{record();if(valid())emit accepted();});
+    auto *escape=new QShortcut(QKeySequence(Qt::Key_Escape),this);
+    escape->setContext(Qt::WidgetWithChildrenShortcut);connect(escape,&QShortcut::activated,this,&EditorPage::cancelled);
+    recordTimer_.setSingleShot(true);recordTimer_.setInterval(250);
+    connect(&recordTimer_,&QTimer::timeout,this,&EditorPage::record);
+}
+void EditorPage::begin(const QImage &image,const ImageProcessor::Options &options,const QString &name,Mode mode)
+{
+    recordTimer_.stop();original_=image;draft_=options;mode_=mode;
+    name_->setText("编辑图片 · "+name);name_->setToolTip(name);
+    history_={{options,mode}};index_=0;buildPanel();
+}
+void EditorPage::end()
+{
+    recordTimer_.stop();preview_=nullptr;panel_=nullptr;
+    while(auto *item=body_->takeAt(0)){delete item->widget();delete item;}
+    original_={};draft_={};history_.clear();index_=0;
+}
+ImageProcessor::Options EditorPage::options() const
+{
+    if(auto *p=qobject_cast<GeometryDialog *>(panel_))return p->options();
+    if(auto *p=qobject_cast<ToneDialog *>(panel_))return p->options();
+    if(auto *p=qobject_cast<BackgroundDialog *>(panel_))return p->options();
+    auto result=draft_;
+    if(auto *p=qobject_cast<ResizeDialog *>(panel_)) {
+        const auto size=p->targetSize();
+        // 没有改动尺寸时，保留空 targetSize 的原始语义。
+        if(size!=p->property("entrySize").toSize())result.targetSize=cv::Size(size.width(),size.height());
+    }
+    return result;
+}
+bool EditorPage::valid() const
+{
+    auto *box=panel_?panel_->findChild<QDialogButtonBox *>():nullptr;
+    return box && box->button(QDialogButtonBox::Ok)->isEnabled();
+}
+void EditorPage::updateButtons()
+{
+    const bool pending=panel_ && !history_.empty() && !(options()==history_[index_].options);
+    done_->setEnabled(valid());undo_->setEnabled(index_>0 || pending);
+    redo_->setEnabled(!pending && index_+1<static_cast<int>(history_.size()));
+}
+bool EditorPage::eventFilter(QObject *object,QEvent *event)
+{
+    if(event->type()==QEvent::EnabledChange)updateButtons();
+    // 嵌入的 QDialog 不可用 Enter 自行 accept 并隐藏整块面板。
+    if(object==panel_ && event->type()==QEvent::KeyPress) {
+        const auto key=static_cast<QKeyEvent *>(event)->key();
+        if(key==Qt::Key_Return || key==Qt::Key_Enter)return true;
+    }
+    return QWidget::eventFilter(object,event);
+}
+void EditorPage::record()
+{
+    recordTimer_.stop();
+    if(!panel_ || history_.empty())return;
+    const auto state=options();
+    if(!(state==history_[index_].options)) {
+        history_.resize(index_+1);history_.push_back({state,mode_});
+        if(history_.size()>51)history_.erase(history_.begin());
+        index_=static_cast<int>(history_.size())-1;
+    }
+    updateButtons();
+}
+void EditorPage::selectMode(Mode mode)
+{
+    if(mode==mode_)return;
+    if(!valid()) {modes_->button(mode_)->setChecked(true);return;}
+    record();draft_=options();mode_=mode;buildPanel();
+}
+void EditorPage::undo()
+{
+    record();if(index_==0)return;
+    --index_;draft_=history_[index_].options;mode_=history_[index_].mode;buildPanel();
+}
+void EditorPage::redo()
+{
+    if(index_+1>=static_cast<int>(history_.size()))return;
+    ++index_;draft_=history_[index_].options;mode_=history_[index_].mode;buildPanel();
+}
+void EditorPage::buildPanel()
+{
+    recordTimer_.stop();
+    preview_=nullptr;panel_=nullptr;
+    while(auto *item=body_->takeAt(0)){delete item->widget();delete item;}
+    QWidget *container=nullptr;
+    if(mode_==Crop)panel_=new GeometryDialog(original_,draft_,host_);
+    else if(mode_==Tone)panel_=new ToneDialog(original_,draft_,host_);
+    else if(mode_==Background)panel_=new BackgroundDialog(original_,draft_,host_);
+    else {
+        container=new QWidget(host_);auto *row=new QHBoxLayout(container);row->setContentsMargins(0,0,0,0);row->setSpacing(18);
+        preview_=new PreviewLabel(container);row->addWidget(preview_,1);
+        QSize current=original_.size();
+        // 尺寸只需要几何结果；跳过分割和调色，避免在切页时重复昂贵处理。
+        if(draft_.targetSize!=cv::Size())current=QSize(draft_.targetSize.width,draft_.targetSize.height);
+        else {
+            cv::Mat dimensions(original_.height(),original_.width(),CV_8UC1,cv::Scalar(0));
+            const auto transformed=ImageProcessor::transformGeometry(dimensions,draft_);
+            current=QSize(transformed.cols,transformed.rows);
+        }
+        auto *resize=new ResizeDialog(original_.size(),current,container);panel_=resize;
+        panel_->setProperty("entrySize",current);resize->embedInEditor();
+        auto *scroll=new QScrollArea(container);scroll->setFrameShape(QFrame::NoFrame);scroll->setWidgetResizable(true);
+        scroll->setFixedWidth(320);scroll->setWidget(resize);row->addWidget(scroll);
+        auto source=original_.width()>1280 || original_.height()>1280
+            ?original_.scaled(1280,1280,Qt::KeepAspectRatio,Qt::SmoothTransformation):original_;
+        const auto refresh=[this,resize,source] {
+            if(!valid())return;
+            auto opt=draft_;const auto size=resize->targetSize().scaled(1280,1280,Qt::KeepAspectRatio).boundedTo(resize->targetSize());
+            opt.targetSize=cv::Size(size.width(),size.height());
+            try{preview_->setImage(QPixmap::fromImage(ImageProcessing::processImage(source,opt)));}
+            catch(const std::exception &e){preview_->setToolTip(QString::fromUtf8(e.what()));}
+        };
+        for(auto *spin:resize->findChildren<QSpinBox *>())connect(spin,&QSpinBox::valueChanged,this,refresh);
+        for(auto *button:resize->findChildren<QAbstractButton *>())connect(button,&QAbstractButton::clicked,this,refresh);
+        refresh();
+    }
+    if(!container){DialogAppearance::embed(panel_);container=panel_;preview_=panel_->findChild<PreviewLabel *>();}
+    body_->addWidget(container);panel_->installEventFilter(this);
+    panel_->findChild<QDialogButtonBox *>()->button(QDialogButtonBox::Ok)->installEventFilter(this);
+    if(preview_) {
+        preview_->setStyleSheet("QGraphicsView {background:#202124; border:1px solid #363a43; border-radius:10px;}");
+        preview_->setBackgroundBrush(QColor("#202124"));preview_->setCornerRadius(10);
+        connect(preview_,&PreviewLabel::zoomChanged,this,[this](int value){zoom_->setText(QString::number(value)+"%");});
+        QTimer::singleShot(0,preview_,[view=preview_]{view->fitToWindow();});
+    }
+    const auto changed=[this]{recordTimer_.start();updateButtons();};
+    for(auto *spin:panel_->findChildren<QSpinBox *>())connect(spin,&QSpinBox::valueChanged,this,changed);
+    for(auto *spin:panel_->findChildren<QDoubleSpinBox *>())connect(spin,&QDoubleSpinBox::valueChanged,this,changed);
+    for(auto *slider:panel_->findChildren<QSlider *>())connect(slider,&QSlider::valueChanged,this,changed);
+    for(auto *combo:panel_->findChildren<QComboBox *>())connect(combo,&QComboBox::currentIndexChanged,this,changed);
+    for(auto *button:panel_->findChildren<QAbstractButton *>())connect(button,&QAbstractButton::clicked,this,changed);
+    if(auto *selection=panel_->findChild<SelectionItem *>())connect(selection,&SelectionItem::selectionChanged,this,changed);
+    if(auto *bg=qobject_cast<BackgroundDialog *>(panel_))connect(bg,&BackgroundDialog::optionsChanged,this,changed);
+    modes_->button(mode_)->setChecked(true);panel_->show();updateButtons();
+}

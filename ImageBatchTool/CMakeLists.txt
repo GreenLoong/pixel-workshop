@@ -27,6 +27,7 @@ qt_add_executable(ImageBatchTool
     mainwindow.cpp
     mainwindow.h
     mainwindow.ui
+    editorpage.cpp editorpage.h
     imageprocessor.h
     imageprocessor.cpp
     backgroundprocessor.cpp backgrounddialog.cpp backgrounddialog.h
@@ -91,6 +92,7 @@ if(IMAGEBATCHTOOL_BUILD_TESTS)
     qt_add_executable(dialog_interaction_tests
         tests/dialog_interaction_tests.cpp
         mainwindow.cpp mainwindow.h mainwindow.ui
+        editorpage.cpp editorpage.h
         previewlabel.cpp previewlabel.h
         resizedialog.cpp resizedialog.h resizedialog.ui
         tonedialog.cpp tonedialog.h dialogappearance.cpp dialogappearance.h

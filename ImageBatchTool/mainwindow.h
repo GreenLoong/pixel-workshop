@@ -13,6 +13,8 @@ class MainWindow;
 }
 QT_END_NAMESPACE
 class QUndoStack;
+class QStackedWidget;
+class EditorPage;
 
 class MainWindow : public QMainWindow
 {
@@ -38,9 +40,12 @@ private slots:
     void showBackgroundDialog();
     void showBatchDialog();
     void showFullScreenPreview();
+    void showEditor();
 
 private:
     void setupMenus();
+    void enterEditor(int mode);
+    void leaveEditor();
     void setupWindowControls();
     void updateWindowFrame();
     void setupZoomControls();
@@ -60,6 +65,8 @@ private:
 
     ImageProcessor::Options processingOptions_;
     QUndoStack *history_ = nullptr;
+    QStackedWidget *pages_ = nullptr;
+    EditorPage *editor_ = nullptr;
 };
 
 #endif // MAINWINDOW_H

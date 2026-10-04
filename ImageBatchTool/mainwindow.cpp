@@ -1,6 +1,8 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 #include "imageprocessing.h"
+#include "editorpage.h"
+#include <QStackedWidget>
 #include "tonedialog.h"
 #include "geometrydialog.h"
 #include "backgrounddialog.h"
@@ -196,6 +198,14 @@ MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent), ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
+    pages_=new QStackedWidget(this);
+    auto *home=takeCentralWidget();pages_->addWidget(home);setCentralWidget(pages_);
+    editor_=new EditorPage(pages_);pages_->addWidget(editor_);
+    setMinimumSize(1000,640);
+    connect(editor_,&EditorPage::cancelled,this,&MainWindow::leaveEditor);
+    connect(editor_,&EditorPage::accepted,this,[this] {
+        if(applyProcessing(editor_->options()))leaveEditor();
+    });
     setWindowFlag(Qt::FramelessWindowHint);
     setAttribute(Qt::WA_TranslucentBackground);
     setMouseTracking(true);
@@ -221,10 +231,12 @@ MainWindow::MainWindow(QWidget *parent)
     brandLayout->addWidget(appIcon);brandLayout->addWidget(ui->appTitleLabel,1);ui->sidebarLayout->insertWidget(titleIndex,brand);
     auto *editButton=new QToolButton(this);
     editButton->setObjectName("editImageButton");editButton->setText("编辑图片");
-    editButton->setMenu(findChild<QMenu *>("editMenu"));editButton->setPopupMode(QToolButton::InstantPopup);
+    connect(editButton,&QToolButton::clicked,this,&MainWindow::showEditor);
     editButton->setSizePolicy(QSizePolicy::Expanding,QSizePolicy::Fixed);editButton->setMinimumHeight(40);
     ui->adjustLayout->insertWidget(0,editButton);
     ui->resizeButton->hide();ui->grayscaleButton->hide();ui->toneButton->hide();
+    ui->restoreButton->hide();ui->editSectionLabel->setText("工作区");
+    ui->shortcutHintLabel->setText("Ctrl+O 打开    Ctrl+S 保存\nCtrl+E 编辑    Ctrl+Z 撤销");
     auto *batchButton=new QPushButton("文件夹批量处理",this);batchButton->setObjectName("batchButton");
     ui->adjustLayout->addWidget(batchButton);connect(batchButton,&QPushButton::clicked,this,&MainWindow::showBatchDialog);
     applyTheme();
@@ -232,6 +244,7 @@ MainWindow::MainWindow(QWidget *parent)
     setupWindowControls();
     installEventFilter(this);
     ui->centralwidget->installEventFilter(this);
+    editor_->installEventFilter(this);
     statusBar()->installEventFilter(this);
 
     // 打开图片
@@ -405,6 +418,8 @@ void MainWindow::setupWindowControls()
     });
     connect(closeButton, &QToolButton::clicked, this, &QWidget::close);
     menuBar()->setCornerWidget(controls, Qt::TopRightCorner);
+    auto *caption=new QLabel("  Pixel Workshop",menuBar());caption->setObjectName("windowCaption");
+    caption->setAttribute(Qt::WA_TransparentForMouseEvents);menuBar()->setCornerWidget(caption,Qt::TopLeftCorner);
     menuBar()->installEventFilter(this);
 }
 
@@ -412,6 +427,11 @@ void MainWindow::showFullScreenPreview()
 {
     if (currentImage.isNull())
         return;
+    QPixmap displayed=currentImage;
+    if(pages_->currentWidget()==editor_) {
+        try{displayed=QPixmap::fromImage(ImageProcessing::processImage(originalImage.toImage(),editor_->options()));}
+        catch(const std::exception &error){QMessageBox::warning(this,"无法预览",QString::fromUtf8(error.what()));return;}
+    }
     QDialog dialog(this, Qt::Window | Qt::FramelessWindowHint);
     dialog.setObjectName("imageFullScreenDialog");
     dialog.setStyleSheet("QDialog#imageFullScreenDialog { background: black; }");
@@ -421,7 +441,7 @@ void MainWindow::showFullScreenPreview()
     preview->setObjectName("fullScreenPreview");
     preview->setStyleSheet("QGraphicsView { background: black; border: none; border-radius: 0; }");
     preview->setBackgroundBrush(Qt::black);
-    preview->setImage(currentImage);
+    preview->setImage(displayed);
     layout->addWidget(preview);
     auto *escape = new QShortcut(QKeySequence(Qt::Key_Escape), &dialog);
     connect(escape, &QShortcut::activated, &dialog, &QDialog::reject);
@@ -534,9 +554,9 @@ void MainWindow::setupMenus()
     history_=new QUndoStack(this);
     history_->setUndoLimit(50);
     auto *undo=history_->createUndoAction(this,"撤销");
-    undo->setObjectName("undoAction"); undo->setShortcut(QKeySequence::Undo);
+    undo->setObjectName("undoAction");
     auto *redo=history_->createRedoAction(this,"重做");
-    redo->setObjectName("redoAction"); redo->setShortcuts({QKeySequence::Redo,QKeySequence("Ctrl+Shift+Z")});
+    redo->setObjectName("redoAction");
     edit->addAction(undo);edit->addAction(redo);edit->addSeparator();
     auto *geometry = edit->addAction("裁剪与旋转…");
     geometry->setShortcut(QKeySequence("Ctrl+R"));
@@ -551,6 +571,19 @@ void MainWindow::setupMenus()
     auto *gray = edit->addAction("灰度化");
     gray->setObjectName("grayscaleAction");gray->setCheckable(true);
     connect(gray,&QAction::triggered,this,[this](bool enabled){auto options=processingOptions_;options.grayscale=enabled;applyProcessing(options);});
+    // 动作仍提供快捷键，标题栏不再重复展示文件和编辑菜单。
+    for(auto *menu:{fileMenu,edit}) {
+        menuBar()->removeAction(menu->menuAction());
+        addActions(menu->actions());
+    }
+    auto *editShortcut=new QShortcut(QKeySequence("Ctrl+E"),this);
+    connect(editShortcut,&QShortcut::activated,this,&MainWindow::showEditor);
+    auto *undoShortcut=new QShortcut(QKeySequence::Undo,this);
+    connect(undoShortcut,&QShortcut::activated,this,[this]{if(pages_->currentWidget()==editor_)editor_->undo();else history_->undo();});
+    for(const auto &key:{QKeySequence(QKeySequence::Redo),QKeySequence("Ctrl+Shift+Z")}) {
+        auto *shortcut=new QShortcut(key,this);
+        connect(shortcut,&QShortcut::activated,this,[this]{if(pages_->currentWidget()==editor_)editor_->redo();else history_->redo();});
+    }
 }
 
 // 应用整体风格
@@ -737,47 +770,41 @@ void MainWindow::saveImage()
 
 void MainWindow::showResizeDialog()
 {
-    if (originalImage.isNull())
-    {
-        QMessageBox::information(this, "提示", "请先打开一张图片。");
-        return;
-    }
-
-    ResizeDialog dialog(originalImage.size(), currentImage.size(), this);
-
-    // 取消或关闭对话框时，不处理图片
-    if (dialog.exec() != QDialog::Accepted)
-    {
-        return;
-    }
-
-    auto options = processingOptions_;
-    const QSize target = dialog.targetSize();
-    options.targetSize = cv::Size(target.width(), target.height());
-    applyProcessing(options);
+    enterEditor(EditorPage::Resize);
 }
 
 void MainWindow::showToneDialog()
 {
-    if (originalImage.isNull())
-        return;
-    ToneDialog dialog(originalImage.toImage(), processingOptions_, this);
-    if (dialog.exec() == QDialog::Accepted)
-        applyProcessing(dialog.options());
+    enterEditor(EditorPage::Tone);
 }
 
 void MainWindow::showGeometryDialog()
 {
-    if(originalImage.isNull()) return;
-    GeometryDialog dialog(originalImage.toImage(),processingOptions_,this);
-    if(dialog.exec()==QDialog::Accepted) applyProcessing(dialog.options());
+    enterEditor(EditorPage::Crop);
 }
 
 void MainWindow::showBackgroundDialog()
 {
+    enterEditor(EditorPage::Background);
+}
+void MainWindow::showEditor(){enterEditor(EditorPage::Crop);}
+void MainWindow::enterEditor(int mode)
+{
     if(originalImage.isNull())return;
-    BackgroundDialog dialog(originalImage.toImage(),processingOptions_,this);
-    if(dialog.exec()==QDialog::Accepted)applyProcessing(dialog.options());
+    if(pages_->currentWidget()==editor_){editor_->selectMode(static_cast<EditorPage::Mode>(mode));return;}
+    editor_->begin(originalImage.toImage(),processingOptions_,QFileInfo(currentFilePath).fileName(),static_cast<EditorPage::Mode>(mode));
+    pages_->setCurrentWidget(editor_);statusBar()->hide();
+    for(auto *action:actions())action->setEnabled(false);
+    editor_->setFocus();
+}
+void MainWindow::leaveEditor()
+{
+    pages_->setCurrentIndex(0);statusBar()->show();
+    editor_->end();
+    for(auto *action:actions())action->setEnabled(true);
+    findChild<QAction *>("undoAction")->setEnabled(history_->canUndo());
+    findChild<QAction *>("redoAction")->setEnabled(history_->canRedo());
+    updateActionState();
 }
 
 void MainWindow::showBatchDialog()

@@ -1,0 +1,51 @@
+#ifndef EDITORPAGE_H
+#define EDITORPAGE_H
+#include "imageprocessor.h"
+#include <QWidget>
+#include <QImage>
+#include <QTimer>
+#include <vector>
+class QDialog;
+class QVBoxLayout;
+class QButtonGroup;
+class QPushButton;
+class QLabel;
+class PreviewLabel;
+
+// 编辑会话只持有参数草稿；原图、保存、全局历史由主窗口管理。
+class EditorPage final : public QWidget {
+    Q_OBJECT
+public:
+    enum Mode { Crop, Tone, Resize, Background };
+    explicit EditorPage(QWidget *parent=nullptr);
+    void begin(const QImage &original,const ImageProcessor::Options &options,const QString &name,Mode mode=Crop);
+    ImageProcessor::Options options() const;
+    void selectMode(Mode mode);
+    void undo();
+    void redo();
+    void end();
+signals:
+    void accepted();
+    void cancelled();
+private:
+    bool eventFilter(QObject *,QEvent *) override;
+    void buildPanel();
+    void record();
+    void updateButtons();
+    bool valid() const;
+    QImage original_;
+    ImageProcessor::Options draft_;
+    Mode mode_=Crop;
+    QDialog *panel_=nullptr;
+    QWidget *host_;
+    QVBoxLayout *body_;
+    PreviewLabel *preview_=nullptr;
+    QButtonGroup *modes_;
+    QPushButton *undo_,*redo_,*done_;
+    QLabel *name_,*zoom_;
+    QTimer recordTimer_;
+    struct State {ImageProcessor::Options options;Mode mode;};
+    std::vector<State> history_;
+    int index_=0;
+};
+#endif

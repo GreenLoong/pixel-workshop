@@ -20,6 +20,7 @@ public:
     ~ResizeDialog() override;
 
     QSize targetSize() const;
+    void embedInEditor();
 
 private:
     void setupFramelessWindow();

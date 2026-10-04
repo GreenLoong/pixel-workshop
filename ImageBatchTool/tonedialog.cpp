@@ -16,6 +16,7 @@
 #include <QToolButton>
 #include <QVBoxLayout>
 #include <exception>
+#include <QCheckBox>
 
 ToneDialog::ToneDialog(const QImage &original,const ImageProcessor::Options &options,QWidget *parent)
     : QDialog(parent),initial_(options),working_(options),preview_(new PreviewLabel(this)),
@@ -43,6 +44,9 @@ ToneDialog::ToneDialog(const QImage &original,const ImageProcessor::Options &opt
     auto *scroll=new QScrollArea(this); scroll->setWidget(panel); scroll->setWidgetResizable(true);
     scroll->setFrameShape(QFrame::NoFrame); scroll->setFixedWidth(320); editor->addWidget(scroll);
     body->addLayout(editor,1);
+    auto *gray=new QCheckBox("灰度化",this);gray->setObjectName("grayscaleCheckBox");
+    gray->setChecked(options.grayscale);rows->addWidget(gray);
+    connect(gray,&QCheckBox::toggled,this,[this](bool checked){working_.grayscale=checked;updatePreview();});
     const auto addRow=[&](const QString &label,const QString &name,int min,int max,int value,
                           QWidget *spin,auto changed) {
         auto *row=new QVBoxLayout;

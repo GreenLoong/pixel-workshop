@@ -7,6 +7,8 @@
 #include <QFontMetrics>
 #include <QIcon>
 #include <QLayout>
+#include <QBoxLayout>
+#include <QGridLayout>
 #include <QPushButton>
 #include <QRadioButton>
 #include <QSignalBlocker>
@@ -125,6 +127,19 @@ ResizeDialog::ResizeDialog(const QSize &originalSize, const QSize &currentSize, 
 ResizeDialog::~ResizeDialog()
 {
     delete ui;
+}
+void ResizeDialog::embedInEditor()
+{
+    DialogAppearance::embed(this);
+    ui->comparisonLayout->setDirection(QBoxLayout::TopToBottom);
+    ui->arrowLabel->hide();
+    ui->summaryPanel->setFixedHeight(175);
+    ui->resetLayout->setDirection(QBoxLayout::TopToBottom);
+    while(auto *item=ui->inputLayout->takeAt(0))delete item;
+    const QList<QWidget *> labels{ui->percentSpinBoxLabel,ui->widthSpinBoxLabel,ui->heightSpinBoxLabel};
+    const QList<QWidget *> inputs{ui->percentSpinBox,ui->widthSpinBox,ui->heightSpinBox};
+    for(int i=0;i<3;++i){ui->inputLayout->addWidget(labels[i],i,0);ui->inputLayout->addWidget(inputs[i],i,1);}
+    ui->contentLayout->setContentsMargins(10,12,10,12);
 }
 
 // 去掉系统标题栏，窗口外观完全由样式表决定。

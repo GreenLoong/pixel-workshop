@@ -28,6 +28,13 @@
 #include <QToolButton>
 #include <QWheelEvent>
 #include <QGraphicsSceneHoverEvent>
+#include <QCheckBox>
+#include <QRadioButton>
+#include "editorpage.h"
+#include <QStackedWidget>
+#include <QColorDialog>
+#include <QElapsedTimer>
+#include <QThread>
 #include <iostream>
 #include <stdexcept>
 
@@ -35,6 +42,19 @@ namespace {
 void require(bool pass, const char *message)
 {
     if (!pass) throw std::runtime_error(message);
+}
+template<class Predicate> void waitFor(Predicate predicate)
+{
+    QElapsedTimer elapsed;elapsed.start();
+    while(!predicate() && elapsed.elapsed()<5000){QApplication::processEvents();QThread::msleep(1);}
+    require(predicate(),"Timed out waiting for UI state");
+    QApplication::processEvents();
+}
+void pointer(QWidget *widget,QEvent::Type type,QPoint point)
+{
+    QMouseEvent e(type,point,widget->mapToGlobal(point),type==QEvent::MouseMove?Qt::NoButton:Qt::LeftButton,
+        type==QEvent::MouseButtonRelease?Qt::NoButton:Qt::LeftButton,Qt::NoModifier);
+    QApplication::sendEvent(widget,&e);
 }
 QImage previewImage(ToneDialog &dialog)
 {
@@ -292,6 +312,30 @@ int main(int argc, char **argv)
         undo->trigger();
         require(imageFromMain().pixelColor(0,0).red()==76,"Restore cannot be undone");
         std::cout<<"PASS: edit undo/redo and undo original restoration\n";
+        QMetaObject::invokeMethod(&window,"showToneDialog");app.processEvents();
+        auto *editorPage=window.findChild<EditorPage *>();
+        require(editorPage->isVisible() && !editorPage->findChild<ToneDialog *>()->isWindow(),"Editing still opens a separate window");
+        editorPage->findChild<QSlider *>("brightnessSlider")->setValue(25);
+        editorPage->selectMode(EditorPage::Resize);app.processEvents();
+        require(editorPage->options().brightness==25,"Changing mode discarded tone draft");
+        editorPage->findChild<QSpinBox *>("widthSpinBox")->setValue(300);
+        require(editorPage->options().targetSize==cv::Size(300,200),"Embedded resize aspect ratio failed");
+        editorPage->grab().save("editor-size.png");
+        editorPage->selectMode(EditorPage::Crop);app.processEvents();
+        require(editorPage->options().targetSize==cv::Size(300,200),"Entering crop silently reset target size");
+        editorPage->undo();
+        require(editorPage->options().brightness==25 && editorPage->options().targetSize==cv::Size(),"Draft undo lost unrelated tone change");
+        editorPage->redo();require(editorPage->options().targetSize==cv::Size(300,200),"Draft redo failed");
+        editorPage->findChild<QPushButton *>("cancelEditButton")->click();app.processEvents();
+        require(!editorPage->isVisible() && imageFromMain().pixelColor(0,0).red()==76 && imageFromMain().size()==original.size(),
+                "Cancel committed editor draft to main image");
+        QMetaObject::invokeMethod(&window,"showToneDialog");
+        editorPage->findChild<QSlider *>("brightnessSlider")->setValue(15);
+        editorPage->findChild<QPushButton *>("confirmButton")->click();app.processEvents();
+        require(!editorPage->isVisible() && imageFromMain().pixelColor(0,0).red()==91,"Finish did not apply editor draft");
+        undo->trigger();require(imageFromMain().pixelColor(0,0).red()==76,"Whole editing session cannot be undone");
+        window.grab().save("home-simplified.png");
+        std::cout<<"PASS: in-window editor, combined mode draft, resize, local undo/redo, cancel and atomic finish\n";
         QImage subject(80,80,QImage::Format_RGB888);subject.fill(QColor(20,35,210));
         for(int y=20;y<60;++y)for(int x=25;x<55;++x)subject.setPixelColor(x,y,QColor(220,70,40));
         ImageProcessor::Options bgOptions;bgOptions.background=ImageProcessor::BackgroundMode::Remove;bgOptions.feather=0;
@@ -313,11 +357,37 @@ int main(int argc, char **argv)
         for(auto *item:bgPreview->scene()->items())if(auto *p=qgraphicsitem_cast<QGraphicsPixmapItem *>(item))transparent=p->pixmap().toImage();
         require(transparent.pixelColor(0,0).alpha()==0 && transparent.pixelColor(40,40).alpha()==255,"Background preview alpha incorrect");
         bgDialog.grab().save("background-dialog.png");
-        bgDialog.findChild<QComboBox *>("brushMode")->setCurrentIndex(2);
-        ImageProcessor::BrushStroke bgStroke;bgStroke.foreground=false;bgStroke.radius=.06;bgStroke.points={{.5,.5}};
-        static_cast<BrushPreview *>(bgPreview)->onStroke(bgStroke);
-        bgDialog.findChild<QComboBox *>("brushMode")->setCurrentIndex(3);waitPreview();
+        bgDialog.findChild<QCheckBox *>("brushEnabled")->setChecked(true);
+        bgDialog.findChild<QRadioButton *>("removeBrush")->setChecked(true);
+        waitPreview();
+        auto *brushPreview=static_cast<BrushPreview *>(bgPreview);
+        require(brushPreview->painting && brushPreview->dragMode()==QGraphicsView::NoDrag,"Refresh disabled brush mode");
+        const auto center=brushPreview->mapFromScene(QPointF(40,40));
+        pointer(brushPreview->viewport(),QEvent::MouseMove,center);app.processEvents();
+        const auto smallBrush=brushPreview->viewport()->grab().toImage();
+        bgDialog.findChild<QSlider *>("brushRadiusSlider")->setValue(60);app.processEvents();
+        require(smallBrush!=brushPreview->viewport()->grab().toImage(),"Brush diameter is not shown at pointer");
+        pointer(brushPreview->viewport(),QEvent::MouseButtonPress,center);
+        pointer(brushPreview->viewport(),QEvent::MouseMove,brushPreview->mapFromScene(QPointF(45,40)));
+        pointer(brushPreview->viewport(),QEvent::MouseButtonRelease,brushPreview->mapFromScene(QPointF(45,40)));
+        bgDialog.findChild<QCheckBox *>("brushEnabled")->setChecked(false);waitPreview();
         require(bgDialog.options().strokes.size()==1,"Brush correction not recorded");
+        for(auto *item:bgPreview->scene()->items())if(auto *p=qgraphicsitem_cast<QGraphicsPixmapItem *>(item))
+            require(p->pixmap().toImage().pixelColor(40,40).alpha()==0,"Painted region did not change the actual mask");
+        require(bgDialog.options().strokes[0].points.size()>=2 && !bgDialog.options().strokes[0].foreground,"Real mouse drag did not paint a background stroke");
+        require(bgDialog.findChild<QWidget *>("blurPanel")->isHidden(),"Blur controls visible in remove mode");
+        bgDialog.findChild<QComboBox *>("backgroundMode")->setCurrentIndex(1);waitPreview();
+        require(!bgDialog.findChild<QWidget *>("blurPanel")->isHidden(),"Blur controls missing in blur mode");
+        bgDialog.findChild<QComboBox *>("backgroundMode")->setCurrentIndex(3);waitPreview();
+        bool colorChecked=false;
+        QTimer::singleShot(0,[&] {
+            auto *picker=bgDialog.findChild<QColorDialog *>();if(!picker)return;
+            picker->show();app.processEvents();picker->grab().save("color-picker.png");
+            colorChecked=picker->grab().toImage().pixelColor(5,5).lightness()>180;
+            picker->setCurrentColor(QColor(240,80,20));picker->accept();
+        });
+        bgDialog.findChild<QPushButton *>("backgroundColorButton")->click();waitPreview();
+        require(colorChecked && bgDialog.options().backgroundColor[0]==240,"Color picker background or selected color invalid");
         bgDialog.reject();
         require(bgOptions.strokes.empty(),"Cancelled dialog changed input options");
         std::cout<<"PASS: asynchronous background preview, alpha, mask initialization and cancel protection\n";
@@ -340,8 +410,8 @@ int main(int argc, char **argv)
             BackgroundDialog humanDialog(portrait,humanOptions);humanDialog.show();
             auto *engine=humanDialog.findChild<QComboBox *>("segmentationMethod");
             require(engine->currentIndex()==0,"Portrait model is not the default");
-            auto *brush=humanDialog.findChild<QComboBox *>("brushMode");
-            require(!(brush->model()->flags(brush->model()->index(0,0))&Qt::ItemIsEnabled),"Human mode allowed the old bounding-box background rule");
+            auto *range=humanDialog.findChild<QPushButton *>("rangeSelectionButton");
+            require(range->isHidden(),"Human mode allowed the old bounding-box background rule");
             QEventLoop humanLoop;QTimer poll,timeout;timeout.setSingleShot(true);
             auto *ok=humanDialog.findChild<QDialogButtonBox *>()->button(QDialogButtonBox::Ok);
             QObject::connect(&poll,&QTimer::timeout,&humanLoop,[&]{if(ok->isEnabled())humanLoop.quit();});
@@ -349,10 +419,23 @@ int main(int argc, char **argv)
             poll.start(10);timeout.start(5000);humanLoop.exec();require(ok->isEnabled(),"Human dialog preview failed");
             humanDialog.grab().save("human-background-dialog.png");
             engine->setCurrentIndex(1);
-            require(brush->model()->flags(brush->model()->index(0,0))&Qt::ItemIsEnabled,"Region mode did not restore bounding-box control");
+            require(!range->isHidden(),"Region mode did not restore bounding-box control");
             humanDialog.reject();
             require(humanOptions.segmentation==ImageProcessor::SegmentationMethod::Human,"Cancelled dialog changed original method");
             std::cout<<"PASS: default portrait UI, independent region mode and cancellation\n";
+            EditorPage portraitEditor;portraitEditor.resize(1180,790);
+            portraitEditor.begin(portrait,humanOptions,"人像样例.jpg");portraitEditor.show();app.processEvents();
+            portraitEditor.grab().save("editor-crop.png");
+            portraitEditor.selectMode(EditorPage::Tone);app.processEvents();portraitEditor.grab().save("editor-tone.png");
+            portraitEditor.selectMode(EditorPage::Background);app.processEvents();
+            auto ready=[&]{return portraitEditor.findChild<QPushButton *>("confirmButton",Qt::FindDirectChildrenOnly)->isEnabled();};
+            waitFor(ready);
+            portraitEditor.findChild<QCheckBox *>("brushEnabled")->setChecked(true);waitFor(ready);
+            auto *view=portraitEditor.findChild<PreviewLabel *>("backgroundPreview");
+            pointer(view->viewport(),QEvent::MouseMove,view->mapFromScene(view->sceneRect().center()));
+            app.processEvents();portraitEditor.grab().save("editor-background.png");
+            require(!portraitEditor.findChild<QWidget *>("brushPanel")->isHidden(),"Brush panel not shown in editing page");
+            portraitEditor.end();portraitEditor.close();
         }
     } catch (const std::exception &error) {
         std::cerr << error.what() << '\n';

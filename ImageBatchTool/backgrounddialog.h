@@ -35,11 +35,16 @@ public:
     BackgroundDialog(const QImage &original,const ImageProcessor::Options &options,QWidget *parent=nullptr);
     ~BackgroundDialog() override;
     ImageProcessor::Options options() const {return working_;}
+signals:
+    void optionsChanged();
 private:
-    struct PreviewResult {QImage image;QString error;};
+    struct PreviewResult {QImage image,mask;QString error;};
     void schedulePreview();
     void startPreview();
+    void presentPreview();
     QImage base_;
+    QImage result_;
+    QImage mask_;
     ImageProcessor::Options working_;
     BrushPreview *preview_;
     SelectionItem *selection_;

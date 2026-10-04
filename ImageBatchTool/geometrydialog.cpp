@@ -69,6 +69,7 @@ GeometryDialog::GeometryDialog(const QImage &original, const ImageProcessor::Opt
     angle_->setObjectName("rotationSpinBox"); angle_->setRange(-180,180); angle_->setDecimals(1);
     angle_->setValue(options.rotation); angle_->setSuffix("°"); angle_->setButtonSymbols(QAbstractSpinBox::NoButtons);
     controls->addWidget(angle_); body->addLayout(controls); body->addWidget(sizeLabel_);
+    body->removeItem(tools);body->addLayout(tools);
     auto *footer = new QWidget(this); footer->setObjectName("footerPanel");
     auto *foot = new QHBoxLayout(footer); foot->setContentsMargins(24,16,24,16); foot->addWidget(buttons_); root->addWidget(footer);
     DialogAppearance::setup(this,{heading}); DialogAppearance::setupButtons(buttons_);

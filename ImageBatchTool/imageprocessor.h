@@ -4,6 +4,7 @@
 #include <opencv2/core.hpp>
 #include <vector>
 #include <memory>
+#include <tuple>
 
 namespace ImageProcessor
 {
@@ -13,6 +14,9 @@ struct BrushStroke {
     std::vector<cv::Point2d> points; // 相对于处理后图片的归一化坐标。
     double radius = 0.025;
     bool foreground = true;
+    bool operator==(const BrushStroke &other) const {
+        return points==other.points && radius==other.radius && foreground==other.foreground;
+    }
 };
 // 全部处理参数放在一个值对象中，不依赖窗口或控件。
 struct Options
@@ -45,6 +49,15 @@ struct Options
     int backgroundBlur = 15;
     cv::Scalar backgroundColor{255,255,255}; // RGB
     cv::Mat backgroundImage; // 只读共享，修改时替换整份图片。
+    bool operator==(const Options &o) const {
+        const auto fields=[](const Options &v) {
+            return std::tie(v.grayscale,v.targetSize,v.brightness,v.contrast,v.exposure,
+                v.saturation,v.temperature,v.tint,v.highlights,v.shadows,v.clarity,v.vignette,
+                v.rotation,v.flipHorizontal,v.flipVertical,v.crop,v.background,v.segmentation,
+                v.humanModel,v.foregroundRect,v.strokes,v.feather,v.backgroundBlur,v.backgroundColor);
+        };
+        return fields(*this)==fields(o) && backgroundImage.data==o.backgroundImage.data;
+    }
     bool isIdentity(cv::Size originalSize) const
     {
         return background == BackgroundMode::None && !hasColorAdjustments() && rotation == 0 && !flipHorizontal && !flipVertical && crop == cv::Rect2d()

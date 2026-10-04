@@ -10,5 +10,7 @@ class QWidget;
 namespace DialogAppearance {
 void setup(QDialog *dialog, const QList<QWidget *> &dragAreas);
 void setupButtons(QDialogButtonBox *buttons);
+// 同一套参数面板可独立打开，也可放进主窗口编辑页。
+void embed(QDialog *dialog);
 }
 #endif
