@@ -35,6 +35,7 @@ private slots:
     void showResizeDialog();
     void showToneDialog();
     void showGeometryDialog();
+    void showBackgroundDialog();
     void showFullScreenPreview();
 
 private:

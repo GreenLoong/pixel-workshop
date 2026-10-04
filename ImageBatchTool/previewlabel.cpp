@@ -48,6 +48,15 @@ void PreviewLabel::setImage(const QPixmap &image)
         fitToWindow();
 }
 
+void PreviewLabel::drawBackground(QPainter *painter, const QRectF &rect)
+{
+    QGraphicsView::drawBackground(painter,rect);
+    if(!imageItem_->pixmap().hasAlphaChannel())return;
+    QPixmap tile(16,16);tile.fill(QColor("#ffffff"));
+    QPainter p(&tile);p.fillRect(0,0,8,8,QColor("#dce2ea"));p.fillRect(8,8,8,8,QColor("#dce2ea"));p.end();
+    painter->fillRect(imageItem_->boundingRect().intersected(rect),QBrush(tile));
+}
+
 int PreviewLabel::zoomPercent() const
 {
     return static_cast<int>(std::lround(scale_ * 100));

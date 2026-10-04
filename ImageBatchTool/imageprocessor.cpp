@@ -19,8 +19,8 @@ cv::Mat ImageProcessor::adjustTone(const cv::Mat &source, int brightness, double
 
 cv::Mat ImageProcessor::process(const cv::Mat &rgb, const Options &options)
 {
-    if (rgb.empty() || rgb.type() != CV_8UC3)
-        CV_Error(cv::Error::StsBadArg, "Expected an 8-bit RGB image");
+    if (rgb.empty() || (rgb.type() != CV_8UC3 && rgb.type() != CV_8UC4))
+        CV_Error(cv::Error::StsBadArg, "Expected an 8-bit RGB or RGBA image");
     cv::Mat geometry = transformGeometry(rgb, options);
     const cv::Size target = options.targetSize == cv::Size() ? geometry.size() : options.targetSize;
     if (target.width <= 0 || target.height <= 0
@@ -32,10 +32,21 @@ cv::Mat ImageProcessor::process(const cv::Mat &rgb, const Options &options)
     cv::Mat result = geometry;
     if (target != geometry.size())
         result = resizeToSize(result, target);
+    result = processBackground(result, options);
+    cv::Mat alpha;
+    if (result.channels() == 4) {
+        cv::extractChannel(result, alpha, 3);
+        cv::cvtColor(result, result, cv::COLOR_RGBA2RGB);
+    }
     result = adjustColor(result, options);
     if(options.grayscale) result=toGrayscale(result);
     if (options.brightness != 0 || options.contrast != 1.0)
         result = adjustTone(result, options.brightness, options.contrast);
+    if (!alpha.empty()) {
+        if (result.channels() == 1) cv::cvtColor(result,result,cv::COLOR_GRAY2RGB);
+        cv::cvtColor(result,result,cv::COLOR_RGB2RGBA);
+        cv::insertChannel(alpha,result,3);
+    }
     return result.data == rgb.data ? result.clone() : result;
 }
 
@@ -106,7 +117,7 @@ cv::Mat ImageProcessor::transformGeometry(const cv::Mat &source, const Options &
         matrix.at<double>(1,2) += (height - result.rows) / 2.0;
         cv::Mat rotated;
         cv::warpAffine(result, rotated, matrix, cv::Size(width,height),
-            cv::INTER_LINEAR, cv::BORDER_CONSTANT, cv::Scalar::all(255));
+            cv::INTER_LINEAR, cv::BORDER_CONSTANT, cv::Scalar(255,255,255,0));
         result = rotated;
     }
     const auto &c = options.crop;

@@ -10,7 +10,7 @@ if(WIN32)
 endif()
 
 # Svg 用于加载样式表中的单选框和复选框图标。
-find_package(Qt6 6.5 REQUIRED COMPONENTS Core Widgets Svg)
+find_package(Qt6 6.5 REQUIRED COMPONENTS Core Widgets Svg Concurrent)
 #core:cv::Mat 等基础数据结构。
 #imgproc：灰度转换、缩放等图像处理。
 #imgcodecs：图片读取和保存。
@@ -28,6 +28,7 @@ qt_add_executable(ImageBatchTool
     mainwindow.ui
     imageprocessor.h
     imageprocessor.cpp
+    backgroundprocessor.cpp backgrounddialog.cpp backgrounddialog.h
     imageprocessing.h imageprocessing.cpp
     tonedialog.h tonedialog.cpp
     dialogappearance.h dialogappearance.cpp
@@ -54,6 +55,7 @@ target_link_libraries(ImageBatchTool
         Qt::Core
         Qt::Widgets
         Qt::Svg
+        Qt::Concurrent
         ${OpenCV_LIBS}
 )
 
@@ -73,7 +75,7 @@ install(SCRIPT ${deploy_script})
 option(IMAGEBATCHTOOL_BUILD_TESTS "Build image-processing checks" OFF)
 if(IMAGEBATCHTOOL_BUILD_TESTS)
     enable_testing()
-    add_executable(imageprocessor_tests tests/imageprocessor_tests.cpp imageprocessor.cpp)
+    add_executable(imageprocessor_tests tests/imageprocessor_tests.cpp imageprocessor.cpp backgroundprocessor.cpp)
     set_target_properties(imageprocessor_tests PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)
     target_compile_features(imageprocessor_tests PRIVATE cxx_std_17)
     if(MSVC)
@@ -91,6 +93,7 @@ if(IMAGEBATCHTOOL_BUILD_TESTS)
         tonedialog.cpp tonedialog.h dialogappearance.cpp dialogappearance.h
         geometrydialog.h geometrydialog.cpp selectionitem.h selectionitem.cpp
         imageprocessing.cpp imageprocessing.h imageprocessor.cpp imageprocessor.h
+        backgroundprocessor.cpp backgrounddialog.cpp backgrounddialog.h
         indicators.qrc)
     set_target_properties(dialog_interaction_tests PROPERTIES AUTORCC ON)
     target_compile_features(dialog_interaction_tests PRIVATE cxx_std_17)
@@ -98,7 +101,7 @@ if(IMAGEBATCHTOOL_BUILD_TESTS)
         target_compile_options(dialog_interaction_tests PRIVATE /utf-8)
     endif()
     target_include_directories(dialog_interaction_tests PRIVATE ${OpenCV_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR})
-    target_link_libraries(dialog_interaction_tests PRIVATE Qt::Widgets Qt::Svg ${OpenCV_LIBS})
+    target_link_libraries(dialog_interaction_tests PRIVATE Qt::Widgets Qt::Svg Qt::Concurrent ${OpenCV_LIBS})
     add_test(NAME dialog_interaction_tests COMMAND dialog_interaction_tests)
     # 本机验证目录含部署产生的 qt.conf，测试显式使用开发环境的离屏插件。
     get_target_property(_qt_core_library Qt::Core IMPORTED_LOCATION_RELEASE)

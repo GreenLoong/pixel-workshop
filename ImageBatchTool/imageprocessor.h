@@ -2,9 +2,16 @@
 #define IMAGEPROCESSOR_H
 
 #include <opencv2/core.hpp>
+#include <vector>
 
 namespace ImageProcessor
 {
+enum class BackgroundMode { None, Blur, Remove, Replace };
+struct BrushStroke {
+    std::vector<cv::Point2d> points; // 相对于处理后图片的归一化坐标。
+    double radius = 0.025;
+    bool foreground = true;
+};
 // 全部处理参数放在一个值对象中，不依赖窗口或控件。
 struct Options
 {
@@ -27,19 +34,27 @@ struct Options
     bool flipHorizontal = false;
     bool flipVertical = false;
     cv::Rect2d crop; // 旋转／翻转之后的归一化区域；空矩形表示不裁剪。
+    BackgroundMode background = BackgroundMode::None;
+    cv::Rect2d foregroundRect{0.1,0.05,0.8,0.9};
+    std::vector<BrushStroke> strokes;
+    int feather = 2; // 在分割预览尺度上的羽化像素。
+    int backgroundBlur = 15;
+    cv::Scalar backgroundColor{255,255,255}; // RGB
+    cv::Mat backgroundImage; // 只读共享，修改时替换整份图片。
     bool isIdentity(cv::Size originalSize) const
     {
-        return !hasColorAdjustments() && rotation == 0 && !flipHorizontal && !flipVertical && crop == cv::Rect2d()
+        return background == BackgroundMode::None && !hasColorAdjustments() && rotation == 0 && !flipHorizontal && !flipVertical && crop == cv::Rect2d()
                && !grayscale && brightness == 0 && contrast == 1.0
                && (targetSize == cv::Size() || targetSize == originalSize);
     }
 };
 
-// 固定顺序：灰度化、调整像素尺寸、亮度和对比度。
-// 输入为 8 位 RGB；结果拥有独立的数据，不修改输入。
+// 顺序：几何、尺寸、背景、颜色、灰度、亮度对比度。
+// 输入为 8 位 RGB 或 RGBA；结果拥有独立的数据，不修改输入。
 cv::Mat process(const cv::Mat &rgb, const Options &options);
 cv::Mat transformGeometry(const cv::Mat &source, const Options &options);
 cv::Mat adjustColor(const cv::Mat &rgb, const Options &options);
+cv::Mat processBackground(const cv::Mat &source, const Options &options);
 cv::Mat adjustTone(const cv::Mat &source, int brightness, double contrast);
 // 输入：8 位、三通道 RGB 图片。
 // 输出：同尺寸的8位、单通道灰度图片。

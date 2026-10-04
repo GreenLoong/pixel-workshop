@@ -133,6 +133,7 @@ void ToneDialog::updatePreview()
     if(basePreview_.isNull())return;
     try {
         auto tone=working_; tone.rotation=0; tone.flipHorizontal=tone.flipVertical=false; tone.crop={};tone.targetSize={};
+        tone.background=ImageProcessor::BackgroundMode::None; // 基础预览已应用背景。
         // 基础预览包含灰度状态，扩展色彩处理之后仍保持灰度。
         preview_->setImage(QPixmap::fromImage(ImageProcessing::processImage(basePreview_,tone)));
         error_->hide();buttons_->button(QDialogButtonBox::Ok)->setEnabled(true);

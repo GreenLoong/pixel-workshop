@@ -102,6 +102,29 @@ int main()
         color={};color.tint=10;color.clarity=30;color.saturation=20;color.exposure=.5;color.grayscale=true;
         require(ImageProcessor::process(mid,color).channels()==1,"Combined color and grayscale");
         std::cout<<"PASS: exposure, saturation, color balance, selective tones and vignette\n";
+        cv::Mat rgba(12,16,CV_8UC4,cv::Scalar(255,0,0,77));
+        ImageProcessor::Options alphaOptions;alphaOptions.grayscale=true;alphaOptions.brightness=10;
+        alphaOptions.targetSize=cv::Size(8,6);alphaOptions.rotation=90;
+        auto alphaResult=ImageProcessor::process(rgba,alphaOptions);
+        require(alphaResult.type()==CV_8UC4 && alphaResult.at<cv::Vec4b>(2,2)==cv::Vec4b(86,86,86,77),"Alpha lost during processing");
+        cv::Mat subject(80,80,CV_8UC3,cv::Scalar(20,35,210));
+        for(int y=20;y<60;++y)for(int x=25;x<55;++x)subject.at<cv::Vec3b>(y,x)=cv::Vec3b(220,70,40);
+        ImageProcessor::Options background;background.background=ImageProcessor::BackgroundMode::Remove;background.feather=0;
+        auto removed=ImageProcessor::process(subject,background);
+        require(removed.channels()==4 && removed.at<cv::Vec4b>(0,0)[3]==0
+            && removed.at<cv::Vec4b>(40,40)[3]==255,"Foreground segmentation failed");
+        background.background=ImageProcessor::BackgroundMode::Replace;background.backgroundColor=cv::Scalar(0,255,0);
+        auto replaced=ImageProcessor::process(subject,background);
+        require(replaced.at<cv::Vec3b>(0,0)==cv::Vec3b(0,255,0)
+            && replaced.at<cv::Vec3b>(40,40)==subject.at<cv::Vec3b>(40,40),"Background replacement failed");
+        background.background=ImageProcessor::BackgroundMode::Blur;
+        require(!ImageProcessor::process(subject,background).empty(),"Background blur failed");
+        background.background=ImageProcessor::BackgroundMode::Remove;
+        ImageProcessor::BrushStroke stroke;stroke.foreground=false;stroke.radius=.07;stroke.points={{.5,.5}};
+        background.strokes.push_back(stroke);
+        require(ImageProcessor::process(subject,background).at<cv::Vec4b>(40,40)[3]==0,"Manual mask correction failed");
+        require(subject.at<cv::Vec3b>(0,0)==cv::Vec3b(20,35,210),"Background processing changed input");
+        std::cout<<"PASS: alpha preservation, background modes and brush mask correction\n";
     } catch (const std::exception &error) {
         std::cerr << error.what() << '\n';
         return 1;

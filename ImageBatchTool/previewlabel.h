@@ -32,6 +32,7 @@ signals:
     void imageAvailable(bool available);
 
 protected:
+    void drawBackground(QPainter *painter, const QRectF &rect) override;
     void wheelEvent(QWheelEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
     void mouseDoubleClickEvent(QMouseEvent *event) override;

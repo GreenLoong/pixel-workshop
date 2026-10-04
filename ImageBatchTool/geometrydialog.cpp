@@ -92,11 +92,11 @@ void GeometryDialog::updateImage()
 {
     try {
         auto base=working_; base.crop={}; base.targetSize={};
+        base.background=ImageProcessor::BackgroundMode::None;
         preview_->setImage(QPixmap::fromImage(ImageProcessing::processImage(previewSource_,base)));
         selection_->setBounds(preview_->sceneRect());
         selection_->setRatio(ratio_->currentData().toDouble());
         preview_->fitToWindow(); updateSize();
-        buttons_->button(QDialogButtonBox::Ok)->setEnabled(true);
     } catch(const std::exception &e) {
         sizeLabel_->setText("预览失败："+QString::fromUtf8(e.what()));
         buttons_->button(QDialogButtonBox::Ok)->setEnabled(false);
@@ -139,5 +139,6 @@ ImageProcessor::Options GeometryDialog::options() const
         && result.flipVertical==initial_.flipVertical && sameCrop(result.crop,initial_.crop))
         return initial_;
     result.targetSize={};
+    result.strokes.clear(); // 几何坐标改变后，需要重新修正背景笔触。
     return result;
 }

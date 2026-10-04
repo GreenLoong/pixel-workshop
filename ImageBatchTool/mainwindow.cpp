@@ -3,6 +3,7 @@
 #include "imageprocessing.h"
 #include "tonedialog.h"
 #include "geometrydialog.h"
+#include "backgrounddialog.h"
 #include "sliderstyle.h"
 #include <exception>
 #include <stdexcept>
@@ -514,6 +515,9 @@ void MainWindow::setupMenus()
     auto *geometry = edit->addAction("裁剪与旋转…");
     geometry->setShortcut(QKeySequence("Ctrl+R"));
     connect(geometry,&QAction::triggered,this,&MainWindow::showGeometryDialog);
+    auto *background=edit->addAction("背景编辑…");
+    background->setShortcut(QKeySequence("Ctrl+B"));
+    connect(background,&QAction::triggered,this,&MainWindow::showBackgroundDialog);
     auto *tone = edit->addAction("颜色与光线…");
     connect(tone,&QAction::triggered,this,&MainWindow::showToneDialog);
     auto *size = edit->addAction("调整大小…");
@@ -767,6 +771,13 @@ void MainWindow::showGeometryDialog()
     if(originalImage.isNull()) return;
     GeometryDialog dialog(originalImage.toImage(),processingOptions_,this);
     if(dialog.exec()==QDialog::Accepted) applyProcessing(dialog.options());
+}
+
+void MainWindow::showBackgroundDialog()
+{
+    if(originalImage.isNull())return;
+    BackgroundDialog dialog(originalImage.toImage(),processingOptions_,this);
+    if(dialog.exec()==QDialog::Accepted)applyProcessing(dialog.options());
 }
 
 void MainWindow::refreshImageUi()

@@ -3,6 +3,8 @@
 #include "previewlabel.h"
 #include "geometrydialog.h"
 #include "selectionitem.h"
+#include "backgrounddialog.h"
+#include <QEventLoop>
 #include <QDoubleSpinBox>
 #include <QApplication>
 #include <QAction>
@@ -274,6 +276,34 @@ int main(int argc, char **argv)
         undo->trigger();
         require(imageFromMain().pixelColor(0,0).red()==76,"Restore cannot be undone");
         std::cout<<"PASS: edit undo/redo and undo original restoration\n";
+        QImage subject(80,80,QImage::Format_RGB888);subject.fill(QColor(20,35,210));
+        for(int y=20;y<60;++y)for(int x=25;x<55;++x)subject.setPixelColor(x,y,QColor(220,70,40));
+        ImageProcessor::Options bgOptions;bgOptions.background=ImageProcessor::BackgroundMode::Remove;bgOptions.feather=0;
+        BackgroundDialog bgDialog(subject,bgOptions);bgDialog.show();
+        require(bgDialog.windowFlags().testFlag(Qt::FramelessWindowHint),"Background dialog kept native title");
+        require(bgDialog.options().foregroundRect.width<1,"Foreground region overwritten by initialization");
+        auto waitPreview=[&] {
+            QEventLoop loop;QTimer poll,timeout;
+            auto *ok=bgDialog.findChild<QDialogButtonBox *>()->button(QDialogButtonBox::Ok);
+            QObject::connect(&poll,&QTimer::timeout,&loop,[&]{if(ok->isEnabled())loop.quit();});
+            QObject::connect(&timeout,&QTimer::timeout,&loop,&QEventLoop::quit);
+            poll.start(10);timeout.setSingleShot(true);timeout.start(5000);loop.exec();
+            require(ok->isEnabled(),"Background preview failed or stopped updating");
+        };
+        waitPreview();
+        auto *bgPreview=bgDialog.findChild<PreviewLabel *>("backgroundPreview");
+        QImage transparent;
+        for(auto *item:bgPreview->scene()->items())if(auto *p=qgraphicsitem_cast<QGraphicsPixmapItem *>(item))transparent=p->pixmap().toImage();
+        require(transparent.pixelColor(0,0).alpha()==0 && transparent.pixelColor(40,40).alpha()==255,"Background preview alpha incorrect");
+        bgDialog.grab().save("background-dialog.png");
+        bgDialog.findChild<QComboBox *>("brushMode")->setCurrentIndex(2);
+        ImageProcessor::BrushStroke bgStroke;bgStroke.foreground=false;bgStroke.radius=.06;bgStroke.points={{.5,.5}};
+        static_cast<BrushPreview *>(bgPreview)->onStroke(bgStroke);
+        bgDialog.findChild<QComboBox *>("brushMode")->setCurrentIndex(3);waitPreview();
+        require(bgDialog.options().strokes.size()==1,"Brush correction not recorded");
+        bgDialog.reject();
+        require(bgOptions.strokes.empty(),"Cancelled dialog changed input options");
+        std::cout<<"PASS: asynchronous background preview, alpha, mask initialization and cancel protection\n";
     } catch (const std::exception &error) {
         std::cerr << error.what() << '\n';
         return 1;
