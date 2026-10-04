@@ -1,0 +1,62 @@
+name: Windows build and tests
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 35
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Configure MSVC x64
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1
+        with:
+          arch: x64
+      - name: Install Qt 6.11.1
+        uses: jurplel/install-qt-action@a9c63c7c123f3069cff414e7e482d95dfa9d8125 # v4
+        with:
+          version: '6.11.1'
+          arch: win64_msvc2022_64
+          modules: qtimageformats
+          cache: true
+      - name: Cache official OpenCV archive
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ${{ runner.temp }}/opencv-cache/opencv-4.13.0-windows.exe
+          key: opencv-windows-4.13.0-f0e98c302464
+      - name: Install and verify OpenCV 4.13.0
+        run: ./tools/ci/install-opencv.ps1 -CacheDirectory "${{ runner.temp }}/opencv-cache"
+      - name: Configure Release with tests
+        run: >-
+          cmake -S ImageBatchTool -B build-ci -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          "-DCMAKE_PREFIX_PATH=$env:QT_ROOT_DIR"
+          "-DOpenCV_DIR=$env:OPENCV_ROOT"
+          -DIMAGEBATCHTOOL_BUILD_TESTS=ON
+      - name: Build
+        run: cmake --build build-ci --parallel 2
+      - name: Test
+        run: ctest --test-dir build-ci --output-on-failure --output-junit test-results.xml
+      - name: Test at 200 percent display scaling
+        run: |
+          $env:QT_SCALE_FACTOR='2'
+          ctest --test-dir build-ci --output-on-failure --output-junit test-results-200.xml
+      - name: Upload test logs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: windows-test-results
+          path: |
+            build-ci/test-results*.xml
+            build-ci/Testing/Temporary/LastTest.log
+          if-no-files-found: ignore

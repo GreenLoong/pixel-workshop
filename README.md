@@ -1,5 +1,7 @@
 # pixel-workshop
 
+[![Windows build and tests](https://github.com/GreenLoong/pixel-workshop/actions/workflows/windows.yml/badge.svg)](https://github.com/GreenLoong/pixel-workshop/actions/workflows/windows.yml)
+
 我基于 C++17、Qt 6 和 OpenCV 4 开发 Windows 桌面图像编辑与批量处理工具。
 
 ## 已实现功能
@@ -36,6 +38,8 @@
 
 构建测试时启用 `IMAGEBATCHTOOL_BUILD_TESTS=ON`，构建后运行 CTest。OpenCV DLL 所在目录需要位于测试进程的 PATH。八项检查覆盖处理算法、参数对话框与预览交互、后台批量任务、人像模型推理、图像内存适配、单张后台任务、未保存修改保护和批量参数预设。真实鼠标、触控板和不同电脑上的运行仍需手动验收。
 
+每次推送 main 或提交 PR，GitHub 会自动构建并运行普通与 200% 显示缩放下的测试；记录见 [Actions](https://github.com/GreenLoong/pixel-workshop/actions/workflows/windows.yml)。
+
 Windows 分发方法见[Windows 构建与交付](docs/Windows构建与交付.md)。
 
 ## 源码组织
@@ -55,4 +59,4 @@ Windows 分发方法见[Windows 构建与交付](docs/Windows构建与交付.md)
 
 背景算法的来源、许可证和替换依据见[人像分割算法替换](docs/人像分割算法替换.md)。
 
-分层之后的稳定性与发布完善记录见[小版本记录](docs/稳定性与发布完善.md)。当前版本：v0.17.0。
+分层之后的稳定性与发布完善记录见[小版本记录](docs/稳定性与发布完善.md)。当前版本：v0.18.0。
