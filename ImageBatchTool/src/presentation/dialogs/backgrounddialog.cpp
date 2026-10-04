@@ -168,7 +168,17 @@ BackgroundDialog::BackgroundDialog(const QImage &original,const ImageProcessor::
         working_.strokes.clear();working_.backgroundImage.release();working_.backgroundColor=cv::Scalar::all(255);
         const auto b=preview_->sceneRect();selection_->setSelection(QRectF(b.width()*.1,b.height()*.05,b.width()*.8,b.height()*.9));schedulePreview();
     });
-    try {
+    connect(&baseTask_,&ImageTask::completed,this,[this,setEngine,range,updateTool](const QImage &image,const QString &error) {
+        if(!error.isEmpty()) {message_->setText(error);return;}
+        base_=image;const auto r=working_.foregroundRect;
+        if(!sharedPreview_)preview_->setImage(QPixmap::fromImage(base_));
+        selection_->setBounds(QRectF(QPointF(),base_.size()));
+        selection_->setSelection(QRectF(r.x*base_.width(),r.y*base_.height(),r.width*base_.width(),r.height*base_.height()));
+        if(!sharedPreview_)preview_->fitToWindow();
+        setEngine();range->setChecked(false);initializing_=false;updateTool();schedulePreview();
+    });
+    buttons_->button(QDialogButtonBox::Ok)->setEnabled(false);
+    {
         const int limit=sharedPreview_?PreviewImage::MaxExtent:1024;
         auto base=options;base.background=ImageProcessor::BackgroundMode::None;base.clearTone();base.grayscale=false;
         if(base.targetSize!=cv::Size()) {
@@ -177,16 +187,10 @@ BackgroundDialog::BackgroundDialog(const QImage &original,const ImageProcessor::
             base.targetSize=cv::Size(size.width(),size.height());
         }
         const QImage small=PreviewImage::thumbnail(original,limit);
-        base_=ImageProcessing::processImage(small,base);
-        const auto r=working_.foregroundRect;
-        if(!sharedPreview_)preview_->setImage(QPixmap::fromImage(base_));
-        selection_->setBounds(QRectF(QPointF(),base_.size()));
-        selection_->setSelection(QRectF(r.x*base_.width(),r.y*base_.height(),r.width*base_.width(),r.height*base_.height()));
-        if(!sharedPreview_)preview_->fitToWindow();
-        setEngine();range->setChecked(false);initializing_=false;updateTool();schedulePreview();
-    }catch(const std::exception &e){message_->setText(QString::fromUtf8(e.what()));buttons_->button(QDialogButtonBox::Ok)->setEnabled(false);}
+        baseTask_.submit(small,base);
+    }
 }
-BackgroundDialog::~BackgroundDialog(){watcher_.waitForFinished();preview_->onStroke={};preview_->painting=false;}
+BackgroundDialog::~BackgroundDialog(){preview_->onStroke={};preview_->painting=false;}
 void BackgroundDialog::schedulePreview() {
     emit optionsChanged();
     if(base_.isNull())return;

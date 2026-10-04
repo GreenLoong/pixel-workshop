@@ -60,6 +60,7 @@ void pointer(QWidget *widget,QEvent::Type type,QPoint point)
 }
 QImage previewImage(ToneDialog &dialog)
 {
+    waitFor([&]{return dialog.findChild<QDialogButtonBox *>()->button(QDialogButtonBox::Ok)->isEnabled();});
     auto *preview = dialog.findChild<PreviewLabel *>("tonePreview");
     for (auto *item : preview->scene()->items())
         if (auto *pixmap = qgraphicsitem_cast<QGraphicsPixmapItem *>(item))
@@ -154,7 +155,7 @@ int main(int argc, char **argv)
         for (int value : {20, 40, -10}) {
             brightness->setValue(value);
             require(previewImage(dialog).pixelColor(0, 0).red() == 76 + value,
-                    "Preview did not update synchronously");
+                    "Preview did not update before release");
         }
         brightness->setValue(0);
         mouse(brightness, QEvent::MouseButtonPress, 0.75);
@@ -175,7 +176,7 @@ int main(int argc, char **argv)
         require(edited.grayscale && edited.targetSize == options.targetSize,
                 "Tone edit discarded grayscale or size");
         require(previewImage(dialog).pixelColor(0, 0).red() == qRound(76 * edited.contrast),
-                "Contrast preview did not update synchronously");
+                "Contrast preview did not update before release");
         dialog.findChild<QPushButton *>("resetToneButton")->click();
         require(dialog.options().brightness == 0 && dialog.options().contrast == 1.0
                 && brightness->value() == 0 && contrast->value() == 100,
@@ -188,8 +189,11 @@ int main(int argc, char **argv)
         const QString first = temp.path() + "/first";
         GeometryDialog geometry(original, options);
         geometry.show(); app.processEvents();
+        auto geometryReady=[&]{return geometry.findChild<QDialogButtonBox *>()->button(QDialogButtonBox::Ok)->isEnabled();};
+        waitFor(geometryReady);
         require(geometry.options().targetSize==options.targetSize,"Unchanged geometry reset size");
         geometry.findChild<QDoubleSpinBox *>("rotationSpinBox")->setValue(90);
+        waitFor(geometryReady);
         auto *selection=geometry.findChild<SelectionItem *>();
         const auto bounds=selection->boundingRect().adjusted(8,8,-8,-8);
         selection->setSelection(QRectF(bounds.width()*0.25,bounds.height()*0.25,
@@ -300,22 +304,27 @@ int main(int argc, char **argv)
         auto *redo=window.findChild<QAction *>("redoAction");
         require(!undo->isEnabled(),"New image kept old history");
         QMetaObject::invokeMethod(&window,"converToGrayscale");
+        auto idle=[&]{return !window.property("processingBusy").toBool();};
+        require(!window.findChild<QPushButton *>("saveImageButton")->isEnabled(),"Save enabled while processing");
+        waitFor(idle);
         require(undo->isEnabled() && previewImage(dialog).isNull()==false,"No undo after edit");
-        undo->trigger();
+        undo->trigger();waitFor(idle);
         auto imageFromMain=[&] {
             for(auto *item:mainPreview->scene()->items())
                 if(auto *p=qgraphicsitem_cast<QGraphicsPixmapItem *>(item))return p->pixmap().toImage();
             return QImage();
         };
         require(imageFromMain().pixelColor(0,0)==QColor(Qt::red),"Undo did not restore color");
-        redo->trigger();
+        redo->trigger();waitFor(idle);
         require(imageFromMain().pixelColor(0,0).red()==76,"Redo did not restore grayscale");
-        QMetaObject::invokeMethod(&window,"restoreOriginal");
-        undo->trigger();
+        QMetaObject::invokeMethod(&window,"restoreOriginal");waitFor(idle);
+        undo->trigger();waitFor(idle);
         require(imageFromMain().pixelColor(0,0).red()==76,"Restore cannot be undone");
         std::cout<<"PASS: edit undo/redo and undo original restoration\n";
         QMetaObject::invokeMethod(&window,"showToneDialog");app.processEvents();
         auto *editorPage=window.findChild<EditorPage *>();
+        auto editorReady=[&]{return editorPage->findChild<QPushButton *>("confirmButton",Qt::FindDirectChildrenOnly)->isEnabled();};
+        waitFor(editorReady);
         require(editorPage->isVisible() && !editorPage->findChild<ToneDialog *>()->isWindow(),"Editing still opens a separate window");
         QPointer<PreviewLabel> canvas=editorPage->findChild<PreviewLabel *>("editorPreview");
         require(canvas,"Missing shared editor canvas");
@@ -339,25 +348,25 @@ int main(int argc, char **argv)
         }
         QObject::disconnect(updateConnection);
         std::cout<<"PASS: fixed preview bounds, persistent canvas, zoom/pan and cached result on entering resize\n";
-        editorPage->findChild<QSlider *>("brightnessSlider")->setValue(25);
-        editorPage->selectMode(EditorPage::Resize);app.processEvents();
+        editorPage->findChild<QSlider *>("brightnessSlider")->setValue(25);waitFor(editorReady);
+        waitFor(editorReady);editorPage->selectMode(EditorPage::Resize);app.processEvents();
         require(editorPage->options().brightness==25,"Changing mode discarded tone draft");
         editorPage->findChild<QSpinBox *>("widthSpinBox")->setValue(300);
         require(editorPage->options().targetSize==cv::Size(300,200),"Embedded resize aspect ratio failed");
         editorPage->grab().save("editor-size.png");
-        editorPage->selectMode(EditorPage::Crop);app.processEvents();
+        waitFor(editorReady);editorPage->selectMode(EditorPage::Crop);app.processEvents();waitFor(editorReady);
         require(editorPage->options().targetSize==cv::Size(300,200),"Entering crop silently reset target size");
-        editorPage->undo();
+        editorPage->undo();waitFor(editorReady);
         require(editorPage->options().brightness==25 && editorPage->options().targetSize==cv::Size(),"Draft undo lost unrelated tone change");
-        editorPage->redo();require(editorPage->options().targetSize==cv::Size(300,200),"Draft redo failed");
+        editorPage->redo();waitFor(editorReady);require(editorPage->options().targetSize==cv::Size(300,200),"Draft redo failed");
         editorPage->findChild<QPushButton *>("cancelEditButton")->click();app.processEvents();
         require(!editorPage->isVisible() && imageFromMain().pixelColor(0,0).red()==76 && imageFromMain().size()==original.size(),
                 "Cancel committed editor draft to main image");
-        QMetaObject::invokeMethod(&window,"showToneDialog");
+        QMetaObject::invokeMethod(&window,"showToneDialog");waitFor(editorReady);
         editorPage->findChild<QSlider *>("brightnessSlider")->setValue(15);
-        editorPage->findChild<QPushButton *>("confirmButton")->click();app.processEvents();
+        waitFor(editorReady);editorPage->findChild<QPushButton *>("confirmButton")->click();waitFor(idle);
         require(!editorPage->isVisible() && imageFromMain().pixelColor(0,0).red()==91,"Finish did not apply editor draft");
-        undo->trigger();require(imageFromMain().pixelColor(0,0).red()==76,"Whole editing session cannot be undone");
+        undo->trigger();waitFor(idle);require(imageFromMain().pixelColor(0,0).red()==76,"Whole editing session cannot be undone");
         window.grab().save("home-simplified.png");
         std::cout<<"PASS: in-window editor, combined mode draft, resize, local undo/redo, cancel and atomic finish\n";
         QImage subject(80,80,QImage::Format_RGB888);subject.fill(QColor(20,35,210));
@@ -365,6 +374,7 @@ int main(int argc, char **argv)
         ImageProcessor::Options bgOptions;bgOptions.background=ImageProcessor::BackgroundMode::Remove;bgOptions.feather=0;
         bgOptions.segmentation=ImageProcessor::SegmentationMethod::Region;
         BackgroundDialog bgDialog(subject,bgOptions);bgDialog.show();
+        waitFor([&]{return bgDialog.findChild<QDialogButtonBox *>()->button(QDialogButtonBox::Ok)->isEnabled();});
         require(bgDialog.windowFlags().testFlag(Qt::FramelessWindowHint),"Background dialog kept native title");
         require(bgDialog.options().foregroundRect.width<1,"Foreground region overwritten by initialization");
         auto waitPreview=[&] {

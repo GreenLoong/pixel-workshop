@@ -119,32 +119,30 @@ ToneDialog::ToneDialog(const QImage &original,const ImageProcessor::Options &opt
         }
         working_.clearTone(); updatePreview();
     });
-    try {
+    connect(&task_,&ImageTask::completed,this,[this](const QImage &image,const QString &error) {
+        if(!error.isEmpty()) {
+            error_->setText("预览失败："+error);error_->show();return;
+        }
+        if(basePreview_.isNull()) {basePreview_=PreviewImage::thumbnail(image);updatePreview();return;}
+        preview_->setImage(QPixmap::fromImage(image));
+        error_->hide();buttons_->button(QDialogButtonBox::Ok)->setEnabled(true);
+    });
+    buttons_->button(QDialogButtonBox::Ok)->setEnabled(false);
+    {
         const QSize actual=options.targetSize==cv::Size()?original.size():QSize(options.targetSize.width,options.targetSize.height);
         const QSize small=PreviewImage::boundedSize(actual);
         auto base=options; base.clearTone(); base.grayscale=false;
         base.targetSize=options.targetSize==cv::Size()?cv::Size():cv::Size(small.width(),small.height());
         const QImage source=PreviewImage::thumbnail(original);
-        basePreview_=ImageProcessing::processImage(source,base);
-        basePreview_=PreviewImage::thumbnail(basePreview_);
-        updatePreview();
-    } catch(const std::exception &e) {
-        error_->setText("预览失败："+QString::fromUtf8(e.what()));error_->show();
-        buttons_->button(QDialogButtonBox::Ok)->setEnabled(false);
+        task_.submit(source,base);
     }
 }
 ImageProcessor::Options ToneDialog::options() const {return working_;}
 void ToneDialog::updatePreview()
 {
     if(basePreview_.isNull())return;
-    try {
-        auto tone=working_; tone.rotation=0; tone.flipHorizontal=tone.flipVertical=false; tone.crop={};tone.targetSize={};
-        tone.background=ImageProcessor::BackgroundMode::None; // 基础预览已应用背景。
-        // 基础缓存为中性 RGB；颜色调整之后再应用草稿中的灰度选项。
-        preview_->setImage(QPixmap::fromImage(ImageProcessing::processImage(basePreview_,tone)));
-        error_->hide();buttons_->button(QDialogButtonBox::Ok)->setEnabled(true);
-    } catch(const std::exception &e) {
-        error_->setText("预览失败："+QString::fromUtf8(e.what()));error_->show();
-        buttons_->button(QDialogButtonBox::Ok)->setEnabled(false);
-    }
+    auto tone=working_;tone.rotation=0;tone.flipHorizontal=tone.flipVertical=false;tone.crop={};tone.targetSize={};
+    tone.background=ImageProcessor::BackgroundMode::None;
+    buttons_->button(QDialogButtonBox::Ok)->setEnabled(false);
+    task_.submit(basePreview_,tone);
 }

@@ -1,6 +1,6 @@
 #ifndef GEOMETRYDIALOG_H
 #define GEOMETRYDIALOG_H
-#include "domain/imageprocessor.h"
+#include "application/imagetask.h"
 #include <QDialog>
 #include <QImage>
 class PreviewLabel;
@@ -18,6 +18,8 @@ public:
 private:
     void updateImage();
     void updateSize();
+    ImageTask task_;
+    bool initialized_=false;
     QImage previewSource_;
     QSize originalSize_;
     ImageProcessor::Options initial_;

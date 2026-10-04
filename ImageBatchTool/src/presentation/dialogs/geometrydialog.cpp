@@ -89,28 +89,25 @@ GeometryDialog::GeometryDialog(const QImage &original, const ImageProcessor::Opt
     });
     connect(ratio_,&QComboBox::currentIndexChanged,this,[this] { selection_->setRatio(ratio_->currentData().toDouble()); });
     connect(selection_,&SelectionItem::selectionChanged,this,[this] {updateSize();});
+    connect(&task_,&ImageTask::completed,this,[this](const QImage &image,const QString &error) {
+        if(!error.isEmpty()) {sizeLabel_->setText("预览失败："+error);return;}
+        preview_->setImage(QPixmap::fromImage(image));preview_->setDragMode(QGraphicsView::NoDrag);
+        selection_->setBounds(preview_->sceneRect());selection_->setRatio(ratio_->currentData().toDouble());
+        if(!initialized_ && initial_.crop!=cv::Rect2d()) {
+            const auto b=preview_->sceneRect();const auto r=initial_.crop;
+            selection_->setSelection(QRectF(r.x*b.width(),r.y*b.height(),r.width*b.width(),r.height*b.height()));
+        }
+        initialized_=true;
+        if(!sharedPreview_)preview_->fitToWindow();
+        updateSize();
+    });
     updateImage();
-    if(options.crop != cv::Rect2d()) {
-        const QRectF b=preview_->sceneRect();
-        selection_->setSelection(QRectF(options.crop.x*b.width(),options.crop.y*b.height(),
-                                        options.crop.width*b.width(),options.crop.height*b.height()));
-    }
 }
 void GeometryDialog::updateImage()
 {
-    try {
-        auto base=working_; base.crop={}; base.targetSize={};
-        base.background=ImageProcessor::BackgroundMode::None;
-        preview_->setImage(QPixmap::fromImage(ImageProcessing::processImage(previewSource_,base)));
-        preview_->setDragMode(QGraphicsView::NoDrag);
-        selection_->setBounds(preview_->sceneRect());
-        selection_->setRatio(ratio_->currentData().toDouble());
-        if(!sharedPreview_)preview_->fitToWindow();
-        updateSize();
-    } catch(const std::exception &e) {
-        sizeLabel_->setText("预览失败："+QString::fromUtf8(e.what()));
-        buttons_->button(QDialogButtonBox::Ok)->setEnabled(false);
-    }
+    auto base=working_;base.crop={};base.targetSize={};base.background=ImageProcessor::BackgroundMode::None;
+    buttons_->button(QDialogButtonBox::Ok)->setEnabled(false);selection_->setVisible(false);
+    task_.submit(previewSource_,base);
 }
 void GeometryDialog::updateSize()
 {
@@ -121,13 +118,15 @@ void GeometryDialog::updateSize()
     sizeLabel_->setText(QString(sharedPreview_?"原图：%1 × %2 px\n裁剪目标：%3 × %4 px"
                                             :"原图：%1 × %2 px    裁剪目标：%3 × %4 px")
         .arg(originalSize_.width()).arg(originalSize_.height()).arg(width).arg(height));
-    const bool valid=ImageProcessor::validOutputSize(size);
+    selection_->setVisible(initialized_ && !task_.isBusy());
+    const bool valid=initialized_ && !task_.isBusy() && ImageProcessor::validOutputSize(size);
     buttons_->button(QDialogButtonBox::Ok)->setEnabled(valid);
 }
 ImageProcessor::Options GeometryDialog::options() const
 {
     auto result=working_;
     const QRectF b=preview_->sceneRect(), r=selection_->selection();
+    if(!initialized_ || b.isEmpty())return working_;
     result.crop=cv::Rect2d(r.x()/b.width(),r.y()/b.height(),r.width()/b.width(),r.height()/b.height());
     if(result.crop==cv::Rect2d(0,0,1,1))result.crop={};
     const auto sameCrop = [](const cv::Rect2d &a,const cv::Rect2d &b) {

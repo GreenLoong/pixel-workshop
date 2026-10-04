@@ -1,7 +1,7 @@
 #ifndef TONEDIALOG_H
 #define TONEDIALOG_H
 
-#include "domain/imageprocessor.h"
+#include "application/imagetask.h"
 #include <QDialog>
 #include <QImage>
 
@@ -22,6 +22,7 @@ public:
 
 private:
     void updatePreview();
+    ImageTask task_;
     QImage basePreview_;
     ImageProcessor::Options working_;
     PreviewLabel *preview_;

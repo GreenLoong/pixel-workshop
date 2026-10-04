@@ -4,7 +4,7 @@
 #include "presentation/dialogs/resizedialog.h"
 #include "presentation/dialogs/backgrounddialog.h"
 #include "presentation/widgets/dialogappearance.h"
-#include "application/imageprocessing.h"
+#include "application/imagetask.h"
 #include "presentation/widgets/selectionitem.h"
 #include "presentation/widgets/brushpreview.h"
 #include "presentation/widgets/previewimage.h"
@@ -183,12 +183,18 @@ void EditorPage::buildPanel(bool reusePreview)
         auto *resize=new ResizeDialog(original_.size(),current,host_);panel_=resize;
         panel_->setProperty("entrySize",current);resize->embedInEditor();
         auto source=PreviewImage::thumbnail(original_);
-        const auto refresh=[this,resize,source] {
-            if(!valid())return;
+        auto *task=new ImageTask(resize);
+        connect(task,&ImageTask::completed,resize,[this,resize](const QImage &image,const QString &error) {
+            if(!error.isEmpty()){preview_->setToolTip(error);return;}
+            preview_->setImage(QPixmap::fromImage(image));
+            resize->findChild<QDialogButtonBox *>()->button(QDialogButtonBox::Ok)->setEnabled(true);
+        });
+        const auto refresh=[this,resize,source,task] {
+            if(!ImageProcessor::validOutputSize(cv::Size(resize->targetSize().width(),resize->targetSize().height())))return;
             auto opt=draft_;const auto size=PreviewImage::boundedSize(resize->targetSize());
             opt.targetSize=cv::Size(size.width(),size.height());
-            try{preview_->setImage(QPixmap::fromImage(ImageProcessing::processImage(source,opt)));}
-            catch(const std::exception &e){preview_->setToolTip(QString::fromUtf8(e.what()));}
+            resize->findChild<QDialogButtonBox *>()->button(QDialogButtonBox::Ok)->setEnabled(false);
+            task->submit(source,opt);
         };
         connect(resize,&ResizeDialog::targetSizeChanged,this,refresh);
         if(!reusePreview)refresh();

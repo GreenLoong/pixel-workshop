@@ -1,6 +1,6 @@
 #include "presentation/windows/mainwindow.h"
 #include "ui_mainwindow.h"
-#include "application/imageprocessing.h"
+#include "application/imagetask.h"
 #include "presentation/pages/editorpage.h"
 #include <QStackedWidget>
 #include "presentation/dialogs/batchdialog.h"
@@ -68,7 +68,7 @@ MainWindow::MainWindow(QWidget *parent)
     setMinimumSize(1000,640);
     connect(editor_,&EditorPage::cancelled,this,&MainWindow::leaveEditor);
     connect(editor_,&EditorPage::accepted,this,[this] {
-        if(applyProcessing(editor_->options()))leaveEditor();
+        applyProcessing(editor_->options());
     });
     setWindowFlag(Qt::FramelessWindowHint);
     setAttribute(Qt::WA_TranslucentBackground);
@@ -86,6 +86,31 @@ MainWindow::MainWindow(QWidget *parent)
     updateWindowFrame();
 
     setupMenus();
+    processing_=new ImageTask(this);
+    cancelProcessing_=new QPushButton("取消处理",this);
+    cancelProcessing_->setObjectName("cancelProcessingButton");cancelProcessing_->hide();
+    statusBar()->addWidget(cancelProcessing_);
+    connect(cancelProcessing_,&QPushButton::clicked,this,&MainWindow::cancelProcessing);
+    connect(processing_,&ImageTask::completed,this,[this](const QImage &image,const QString &error) {
+        if(!error.isEmpty()) {
+            historyApplyGuard_=true;history_->setIndex(committedHistoryIndex_);historyApplyGuard_=false;
+            setProcessingBusy(false);
+            QMessageBox::warning(this,"处理失败",error);return;
+        }
+        const QPixmap processed=QPixmap::fromImage(image);
+        if(fullscreenPending_) {setProcessingBusy(false);presentFullScreen(processed);return;}
+        const auto before=processingOptions_;
+        currentImage=processed;processingOptions_=pendingOptions_;
+        if(recordProcessingHistory_ && !(before==pendingOptions_))
+            history_->push(new ParameterCommand(before,pendingOptions_,[this](const auto &state) {
+                if(!historyApplyGuard_)applyProcessing(state,false);
+            }));
+        committedHistoryIndex_=history_->index();
+        const bool leave=leaveAfterProcessing_;setProcessingBusy(false);
+        if(leave)leaveEditor();
+        refreshImageUi();
+        statusBar()->showMessage(QString("处理完成：%1 × %2 px").arg(processed.width()).arg(processed.height()));
+    });
     auto *brand=new QWidget(this);
     auto *brandLayout=new QHBoxLayout(brand);brandLayout->setContentsMargins(0,0,0,0);brandLayout->setSpacing(10);
     auto *appIcon=new QLabel(brand);appIcon->setObjectName("appIconLabel");
@@ -207,11 +232,15 @@ void MainWindow::showFullScreenPreview()
 {
     if (currentImage.isNull())
         return;
-    QPixmap displayed=currentImage;
+    if(busy_)return;
     if(pages_->currentWidget()==editor_) {
-        try{displayed=QPixmap::fromImage(ImageProcessing::processImage(originalImage.toImage(),editor_->options()));}
-        catch(const std::exception &error){QMessageBox::warning(this,"无法预览",QString::fromUtf8(error.what()));return;}
+        fullscreenPending_=true;setProcessingBusy(true);
+        processing_->submit(originalImage.toImage(),editor_->options());return;
     }
+    presentFullScreen(currentImage);
+}
+void MainWindow::presentFullScreen(const QPixmap &displayed)
+{
     QDialog dialog(this, Qt::Window | Qt::FramelessWindowHint);
     dialog.setObjectName("imageFullScreenDialog");
     dialog.setStyleSheet("QDialog#imageFullScreenDialog { background: black; }");
@@ -359,10 +388,10 @@ void MainWindow::setupMenus()
     auto *editShortcut=new QShortcut(QKeySequence("Ctrl+E"),this);
     connect(editShortcut,&QShortcut::activated,this,&MainWindow::showEditor);
     auto *undoShortcut=new QShortcut(QKeySequence::Undo,this);
-    connect(undoShortcut,&QShortcut::activated,this,[this]{if(pages_->currentWidget()==editor_)editor_->undo();else history_->undo();});
+    connect(undoShortcut,&QShortcut::activated,this,[this]{if(busy_)return;if(pages_->currentWidget()==editor_)editor_->undo();else history_->undo();});
     for(const auto &key:{QKeySequence(QKeySequence::Redo),QKeySequence("Ctrl+Shift+Z")}) {
         auto *shortcut=new QShortcut(key,this);
-        connect(shortcut,&QShortcut::activated,this,[this]{if(pages_->currentWidget()==editor_)editor_->redo();else history_->redo();});
+        connect(shortcut,&QShortcut::activated,this,[this]{if(busy_)return;if(pages_->currentWidget()==editor_)editor_->redo();else history_->redo();});
     }
 }
 
@@ -376,6 +405,7 @@ void MainWindow::applyTheme()
 // 打开图片
 void MainWindow::openImage()
 {
+    if(busy_)return;
     QSettings settings;
     QString directory = settings.value("files/lastOpenDirectory").toString();
     if (!QDir(directory).exists() || directory.isEmpty())
@@ -410,7 +440,7 @@ void MainWindow::openImage()
     currentImage = image;
     currentFilePath = filePath;
     processingOptions_ = {};
-    history_->clear();
+    history_->clear();committedHistoryIndex_=0;
 
     refreshImageUi();
     ui->imageLabel->fitToWindow();
@@ -478,7 +508,9 @@ void MainWindow::updateImageInfo()
 // 根据当前状态启用或禁用按钮
 void MainWindow::updateActionState()
 {
-    const bool hasImage = !currentImage.isNull();
+    const bool hasImage = !currentImage.isNull() && !busy_;
+    ui->openImageButton->setEnabled(!busy_);
+    findChild<QPushButton *>("batchButton")->setEnabled(!busy_);
 
     ui->saveImageButton->setEnabled(hasImage);
     if(auto *edit=findChild<QMenu *>("editMenu"))edit->setEnabled(hasImage);
@@ -508,12 +540,13 @@ void MainWindow::restoreOriginal()
 
     applyProcessing({});
 
-    statusBar()->showMessage("已恢复为原图");
+
 }
 
 // 另存为
 void MainWindow::saveImage()
 {
+    if(busy_)return;
     if (currentImage.isNull())
     {
         QMessageBox::information(this, "提示", "请先打开一张图片");
@@ -560,7 +593,7 @@ void MainWindow::showBackgroundDialog()
 void MainWindow::showEditor(){enterEditor(EditorPage::Crop);}
 void MainWindow::enterEditor(int mode)
 {
-    if(originalImage.isNull())return;
+    if(originalImage.isNull() || busy_)return;
     if(pages_->currentWidget()==editor_){editor_->selectMode(static_cast<EditorPage::Mode>(mode));return;}
     editor_->begin(originalImage.toImage(),processingOptions_,QFileInfo(currentFilePath).fileName(),static_cast<EditorPage::Mode>(mode));
     pages_->setCurrentWidget(editor_);statusBar()->hide();
@@ -579,6 +612,7 @@ void MainWindow::leaveEditor()
 
 void MainWindow::showBatchDialog()
 {
+    if(busy_)return;
     BatchDialog dialog(processingOptions_,this);
     dialog.exec();
 }
@@ -590,29 +624,30 @@ void MainWindow::refreshImageUi()
     updatePreview();
 }
 
-bool MainWindow::applyProcessing(const ImageProcessor::Options &options, bool recordHistory)
+void MainWindow::setProcessingBusy(bool busy)
 {
-    if (originalImage.isNull())
-        return false;
-    try {
-        const auto before=processingOptions_;
-        QPixmap processed = options.isIdentity(cv::Size(originalImage.width(),originalImage.height()))
-            ?originalImage:QPixmap::fromImage(ImageProcessing::processImage(originalImage.toImage(), options));
-        if (processed.isNull())
-            throw std::runtime_error("Unable to create the output pixmap");
-        // 结果成功后一起提交图片和参数，失败时保留上一份有效状态。
-        currentImage = processed;
-        processingOptions_ = options;
-        if(recordHistory)
-            history_->push(new ParameterCommand(before,options,[this](const auto &state) {
-                applyProcessing(state,false);
-            }));
-        refreshImageUi();
-        statusBar()->showMessage(QString("处理完成：%1 × %2 px")
-                                 .arg(processed.width()).arg(processed.height()));
-        return true;
-    } catch (const std::exception &error) {
-        QMessageBox::warning(this, "处理失败", QString::fromUtf8(error.what()));
-        return false;
+    busy_=busy;setProperty("processingBusy",busy);
+    cancelProcessing_->setVisible(busy);editor_->setEnabled(!busy);
+    for(auto *action:actions())action->setEnabled(!busy && pages_->currentWidget()!=editor_);
+    if(!busy) {
+        findChild<QAction *>("undoAction")->setEnabled(history_->canUndo());
+        findChild<QAction *>("redoAction")->setEnabled(history_->canRedo());
     }
+    updateActionState();
+    if(busy) {statusBar()->show();statusBar()->showMessage("正在后台处理图片… 可取消本次结果");}
+    else if(pages_->currentWidget()==editor_)statusBar()->hide();
+}
+void MainWindow::cancelProcessing()
+{
+    processing_->cancel();
+    historyApplyGuard_=true;history_->setIndex(committedHistoryIndex_);historyApplyGuard_=false;
+    setProcessingBusy(false);statusBar()->showMessage("已取消处理，保留上一次结果",5000);
+}
+bool MainWindow::applyProcessing(const ImageProcessor::Options &options,bool recordHistory)
+{
+    if(originalImage.isNull() || busy_)return false;
+    pendingOptions_=options;recordProcessingHistory_=recordHistory;fullscreenPending_=false;
+    leaveAfterProcessing_=pages_->currentWidget()==editor_;
+    setProcessingBusy(true);processing_->submit(originalImage.toImage(),options);
+    return true;
 }

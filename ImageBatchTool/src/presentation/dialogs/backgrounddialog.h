@@ -2,6 +2,7 @@
 #define BACKGROUNDDIALOG_H
 #include "domain/imageprocessor.h"
 #include "application/backgroundpreview.h"
+#include "application/imagetask.h"
 #include "presentation/widgets/brushpreview.h"
 #include <QDialog>
 #include <QFutureWatcher>
@@ -23,6 +24,7 @@ private:
     void schedulePreview();
     void startPreview();
     void presentPreview();
+    ImageTask baseTask_;
     QImage base_;
     QImage result_;
     QImage mask_;

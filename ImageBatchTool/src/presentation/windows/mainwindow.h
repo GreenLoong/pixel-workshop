@@ -15,6 +15,8 @@ QT_END_NAMESPACE
 class QUndoStack;
 class QStackedWidget;
 class EditorPage;
+class ImageTask;
+class QPushButton;
 
 class MainWindow : public QMainWindow
 {
@@ -44,6 +46,9 @@ private slots:
 
 private:
     void setupMenus();
+    void setProcessingBusy(bool busy);
+    void cancelProcessing();
+    void presentFullScreen(const QPixmap &image);
     void enterEditor(int mode);
     void leaveEditor();
     void setupWindowControls();
@@ -56,6 +61,12 @@ private:
     void refreshImageUi();
     bool applyProcessing(const ImageProcessor::Options &options, bool recordHistory = true);
 
+    ImageTask *processing_;
+    QPushButton *cancelProcessing_;
+    bool busy_=false, fullscreenPending_=false, leaveAfterProcessing_=false;
+    bool recordProcessingHistory_=true, historyApplyGuard_=false;
+    int committedHistoryIndex_=0;
+    ImageProcessor::Options pendingOptions_;
     Ui::MainWindow *ui;
     QWidget *windowFrame_ = nullptr;
 

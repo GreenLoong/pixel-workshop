@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.19)
 
 set(CMAKE_USER_MAKE_RULES_OVERRIDE_CXX "${CMAKE_CURRENT_SOURCE_DIR}/cmake/MSVCDependencies.cmake")
-project(ImageBatchTool LANGUAGES CXX)
+project(ImageBatchTool VERSION 0.15.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -33,8 +33,9 @@ target_link_libraries(pixel_infrastructure PUBLIC pixel_domain Qt::Gui)
 add_library(pixel_application STATIC
     src/application/imageprocessing.cpp src/application/imageprocessing.h
     src/application/batchjob.cpp src/application/batchjob.h
-    src/application/backgroundpreview.cpp src/application/backgroundpreview.h)
-target_link_libraries(pixel_application PUBLIC pixel_infrastructure)
+    src/application/backgroundpreview.cpp src/application/backgroundpreview.h
+    src/application/imagetask.cpp src/application/imagetask.h)
+target_link_libraries(pixel_application PUBLIC pixel_infrastructure Qt::Concurrent)
 add_library(pixel_presentation STATIC
     src/presentation/windows/mainwindow.cpp src/presentation/windows/mainwindow.h src/presentation/windows/mainwindow.ui
     src/presentation/pages/editorpage.cpp src/presentation/pages/editorpage.h
@@ -88,7 +89,9 @@ if(IMAGEBATCHTOOL_BUILD_TESTS)
     target_link_libraries(segmentation_tests PRIVATE pixel_application pixel_resources)
     qt_add_executable(imageconversion_tests tests/imageconversion_tests.cpp)
     target_link_libraries(imageconversion_tests PRIVATE pixel_infrastructure)
-    foreach(test IN ITEMS imageprocessor_tests dialog_interaction_tests batch_tests segmentation_tests imageconversion_tests)
+    qt_add_executable(imagetask_tests tests/imagetask_tests.cpp)
+    target_link_libraries(imagetask_tests PRIVATE pixel_application pixel_resources)
+    foreach(test IN ITEMS imageprocessor_tests dialog_interaction_tests batch_tests segmentation_tests imageconversion_tests imagetask_tests)
         if(MSVC)
             target_compile_options(${test} PRIVATE /utf-8)
         endif()
