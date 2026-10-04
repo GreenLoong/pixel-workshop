@@ -7,39 +7,9 @@
   </property>
   <property name="minimumSize">
    <size>
-    <width>580</width>
+    <width>640</width>
     <height>0</height>
    </size>
-  </property>
-  <property name="styleSheet">
-   <string>QDialog#ResizeDialog { background: white; }
-QWidget { font-family: "Microsoft YaHei UI", "Segoe UI"; font-size: 14px; color: #202020; }
-QLabel { background: transparent; }
-QLabel#dialogHeading { font-size: 22px; font-weight: 600; }
-QLabel#modeHeading, QLabel#sizeHeading { font-weight: 600; }
-QLabel#originalSizeLabel, QLabel#modeHint { color: #666; font-size: 12px; }
-QLabel#currentSizeLabel, QLabel#targetSizeLabel { font-weight: 600; }
-QLabel#arrowLabel { color: #888; font-size: 20px; }
-QFrame#summaryPanel { background: #f7f8fa; border: 1px solid #ededed; border-radius: 8px; }
-QFrame#divider { border: none; background: #e5e5e5; max-height: 1px; }
-QWidget#footerPanel { background: #f3f3f3; border-top: 1px solid #e9e9e9; }
-QSpinBox { background: white; border: 1px solid #dedede; border-bottom: 1px solid #8a8a8a; border-radius: 5px; padding: 7px 10px; min-height: 22px; selection-background-color: #0067c0; selection-color: white; }
-QSpinBox:hover { border-color: #a0a0a0; }
-QSpinBox:focus { border-bottom: 2px solid #0067c0; }
-QSpinBox:disabled { background: #f5f5f5; color: #999; border: 1px solid #e9e9e9; }
-QRadioButton, QCheckBox { spacing: 9px; min-height: 28px; }
-QRadioButton:disabled, QCheckBox:disabled { color: #999; }
-QRadioButton::indicator { width: 18px; height: 18px; border-radius: 10px; border: 1px solid #909090; background: white; }
-QRadioButton::indicator:checked { width: 10px; height: 10px; border: 5px solid #0067c0; }
-QPushButton { background: white; border: 1px solid #ddd; border-radius: 5px; padding: 8px 16px; min-height: 20px; }
-QPushButton:hover { background: #f7f7f7; border-color: #bdbdbd; }
-QPushButton:pressed { background: #eee; }
-QPushButton:focus { border: 1px solid #0067c0; }
-QPushButton#confirmButton { background: #0067c0; color: white; border-color: #0067c0; }
-QPushButton#confirmButton:hover { background: #1975c5; }
-QPushButton#confirmButton:pressed { background: #005a9e; }
-QPushButton:disabled, QPushButton#confirmButton:disabled { background: #e9e9e9; color: #999; border-color: #e0e0e0; }
-</string>
   </property>
   <layout class="QVBoxLayout" name="rootLayout">
    <property name="spacing">
@@ -67,18 +37,94 @@ QPushButton:disabled, QPushButton#confirmButton:disabled { background: #e9e9e9; 
        <number>24</number>
       </property>
       <property name="topMargin">
-       <number>24</number>
+       <number>20</number>
       </property>
       <property name="rightMargin">
        <number>24</number>
       </property>
       <property name="bottomMargin">
-       <number>24</number>
+       <number>20</number>
       </property>
       <item>
-       <widget class="QLabel" name="dialogHeading">
-        <property name="text">
-         <string>调整图像大小</string>
+       <widget class="QWidget" name="headerPanel">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="cursor">
+         <cursorShape>SizeAllCursor</cursorShape>
+        </property>
+        <layout class="QHBoxLayout" name="headerLayout">
+         <property name="spacing">
+          <number>12</number>
+         </property>
+         <property name="leftMargin">
+          <number>0</number>
+         </property>
+         <property name="topMargin">
+          <number>0</number>
+         </property>
+         <property name="rightMargin">
+          <number>0</number>
+         </property>
+         <property name="bottomMargin">
+          <number>0</number>
+         </property>
+         <item>
+          <layout class="QVBoxLayout" name="headerTextLayout">
+           <property name="spacing">
+            <number>2</number>
+           </property>
+           <item>
+            <widget class="QLabel" name="dialogHeading">
+             <property name="text">
+              <string>调整图像大小</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QLabel" name="dialogSubtitle">
+             <property name="text">
+              <string>按住此处可以拖动窗口</string>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </item>
+         <item>
+          <widget class="QToolButton" name="closeButton">
+           <property name="minimumSize">
+            <size>
+             <width>32</width>
+             <height>32</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>32</width>
+             <height>32</height>
+            </size>
+           </property>
+           <property name="cursor">
+            <cursorShape>PointingHandCursor</cursorShape>
+           </property>
+           <property name="toolTip">
+            <string>关闭（Esc）</string>
+           </property>
+           <property name="text">
+            <string>✕</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item>
+       <widget class="QFrame" name="divider">
+        <property name="frameShape">
+         <enum>QFrame::HLine</enum>
         </property>
        </widget>
       </item>
@@ -184,13 +230,6 @@ QPushButton:disabled, QPushButton#confirmButton:disabled { background: #e9e9e9; 
        </widget>
       </item>
       <item>
-       <widget class="QFrame" name="divider">
-        <property name="frameShape">
-         <enum>QFrame::HLine</enum>
-        </property>
-       </widget>
-      </item>
-      <item>
        <widget class="QLabel" name="sizeHeading">
         <property name="text">
          <string>图像大小</string>
@@ -282,13 +321,13 @@ QPushButton:disabled, QPushButton#confirmButton:disabled { background: #e9e9e9; 
        <number>24</number>
       </property>
       <property name="topMargin">
-       <number>24</number>
+       <number>16</number>
       </property>
       <property name="rightMargin">
        <number>24</number>
       </property>
       <property name="bottomMargin">
-       <number>24</number>
+       <number>16</number>
       </property>
       <item>
        <widget class="QDialogButtonBox" name="buttonBox">

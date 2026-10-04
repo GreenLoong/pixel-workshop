@@ -4,6 +4,8 @@
 #include <QMainWindow>
 #include <QPixmap>
 #include <QSize>
+#include <QString>
+#include "imageprocessor.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -21,23 +23,38 @@ public:
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
+    void changeEvent(QEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
 
-private:
+private slots:
     void openImage();
-    void updatePreview();
+    void saveImage();
     void converToGrayscale();
     void restoreOriginal();
-    void saveImage();
     void showResizeDialog();
-    bool applyProcessing(bool grayscale, const QSize &targetSize);
+    void showToneDialog();
+    void showFullScreenPreview();
+
+private:
+    void setupMenus();
+    void setupWindowControls();
+    void updateWindowFrame();
+    void setupZoomControls();
+    void applyTheme();
+    void updatePreview();
+    void updateImageInfo();
+    void updateActionState();
+    void refreshImageUi();
+    bool applyProcessing(const ImageProcessor::Options &options);
 
     Ui::MainWindow *ui;
+    QWidget *windowFrame_ = nullptr;
 
-    QPixmap originalImage;  //打开时原图
-    QPixmap currentImage;   //当前处理图
+    QPixmap originalImage;      // 打开时原图
+    QPixmap currentImage;       // 当前处理图
+    QString currentFilePath;    // 当前图片路径
 
-    bool grayscaleEnabled = false;
-
-
+    ImageProcessor::Options processingOptions_;
 };
+
 #endif // MAINWINDOW_H

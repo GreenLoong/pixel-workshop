@@ -1,14 +1,18 @@
 #include "resizedialog.h"
 #include "ui_resizedialog.h"
+#include "dialogappearance.h"
 
 #include <QCheckBox>
 #include <QDialogButtonBox>
+#include <QFontMetrics>
+#include <QIcon>
+#include <QLayout>
 #include <QPushButton>
 #include <QRadioButton>
 #include <QSignalBlocker>
 #include <QSpinBox>
-#include <QLayout>
-#include <QStyle>
+#include <QToolButton>
+#include <QWidget>
 
 #include <algorithm>
 #include <cmath>
@@ -26,33 +30,24 @@ ResizeDialog::ResizeDialog(const QSize &originalSize, const QSize &currentSize, 
 {
     ui->setupUi(this);
 
-    auto *confirmButton = ui->buttonBox->button(QDialogButtonBox::Ok);
-    auto *cancelButton = ui->buttonBox->button(QDialogButtonBox::Cancel);
-    confirmButton->setObjectName("confirmButton");
-    confirmButton->style()->unpolish(confirmButton);
-    confirmButton->style()->polish(confirmButton);
-    confirmButton->setText("确定");
-    cancelButton->setText("取消");
-    confirmButton->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    cancelButton->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    // 移除按钮盒默认的左侧伸缩空间，让底部两个按钮均分宽度。
-    auto *buttonLayout = ui->buttonBox->layout();
-    for (int i = 0; i < buttonLayout->count(); ++i) {
-        if (auto *spacer = buttonLayout->itemAt(i)->spacerItem()) {
-            spacer->changeSize(0, 0, QSizePolicy::Fixed, QSizePolicy::Fixed);
-        }
-    }
-    buttonLayout->invalidate();
-    confirmButton->setDefault(true);
+    setupFramelessWindow();
+    ui->closeButton->setText(QString());
+    ui->closeButton->setIcon(QIcon(":/indicators/close.svg"));
+    ui->closeButton->setIconSize(QSize(14, 14));
+
+    DialogAppearance::setupButtons(ui->buttonBox);
     ui->resetSizeButton->setAutoDefault(false);
     ui->restoreOriginalSizeButton->setAutoDefault(false);
+
+    // 无标题栏时用头部右上角的自绘按钮关闭对话框。
+    connect(ui->closeButton, &QToolButton::clicked, this, &QDialog::reject);
 
     // 保留键盘方向键调节，使用简洁的无箭头输入框。
     for (auto *spinBox : {ui->percentSpinBox, ui->widthSpinBox, ui->heightSpinBox}) {
         spinBox->setButtonSymbols(QAbstractSpinBox::NoButtons);
     }
 
-    // 按百分百
+    // 按百分比
     ui->percentSpinBox->setRange(1, 200);
     ui->percentSpinBox->setValue(100);
     ui->percentSpinBox->setSuffix(" %");
@@ -69,9 +64,6 @@ ResizeDialog::ResizeDialog(const QSize &originalSize, const QSize &currentSize, 
 
     // 打开时用像素模式准确显示当前结果
     ui->pixelRadioButton->setChecked(true);
-
-    // //预期高度
-    // const int expectedHeight = toPixelCount( currentSize.width() * static_cast<double>(originalSize_.height()) / originalSize_.width());
 
     // 默认保存比例
     ui->keepAspectCheckBox->setChecked(true);
@@ -102,18 +94,45 @@ ResizeDialog::ResizeDialog(const QSize &originalSize, const QSize &currentSize, 
     connect(ui->restoreOriginalSizeButton, &QPushButton::clicked,
             this, &ResizeDialog::restoreOriginalSize);
 
-    // 模板可能已连接按钮，这里统一配置，避免重复连接。
-    disconnect(ui->buttonBox, &QDialogButtonBox::accepted, this, &QDialog::accept);
-    disconnect(ui->buttonBox, &QDialogButtonBox::rejected, this, &QDialog::reject);
+    // .ui 中没有按钮盒连接，统一在这里连接一次。
     connect(ui->buttonBox, &QDialogButtonBox::accepted, this, &QDialog::accept);
     connect(ui->buttonBox, &QDialogButtonBox::rejected, this, &QDialog::reject);
 
+    // 摘要区按最坏情况锁定高度：
+    // 尺寸文字可能换行，超限时还会再多一行提示；预留三行后，
+    // 是否显示提示都不会改变卡片高度，避免控件错位。
+    {
+        const QFontMetrics metrics(ui->currentSizeLabel->font());
+        const int lineHeight = metrics.lineSpacing();
+
+        ui->currentSizeLabel->setFixedHeight(lineHeight);
+        ui->targetSizeLabel->setFixedHeight(lineHeight * 3);
+        ui->summaryPanel->setFixedHeight(2 * 16 + metrics.height() + 10 + lineHeight * 3);
+    }
+
+    // 窗口只按布局的最小高度自适应，宽度可由用户拖动改变。
+    layout()->setSizeConstraint(QLayout::SetMinimumSize);
+
+    // 保证摘要区两列都有足够宽度，尺寸文字不会换行到第三行。
+    setMinimumWidth(640);
+
     updateMode();
+
+    // 按当前布局把窗口调整到最小宽度，保证初始宽度就是设计宽度。
+    resize(qMax(640, sizeHint().width()), sizeHint().height());
 }
 
 ResizeDialog::~ResizeDialog()
 {
     delete ui;
+}
+
+// 去掉系统标题栏，窗口外观完全由样式表决定。
+void ResizeDialog::setupFramelessWindow()
+{
+    ui->rootLayout->setContentsMargins(12, 12, 12, 12);
+    DialogAppearance::setup(this, {ui->headerPanel, ui->dialogHeading, ui->dialogSubtitle});
+    ui->closeButton->setCursor(Qt::ArrowCursor);
 }
 
 QSize ResizeDialog::targetSize() const
@@ -193,19 +212,18 @@ void ResizeDialog::updateSummary()
 
     const qint64 pixels = static_cast<qint64>(size.width()) * size.height();
 
-    //第一版暂定最多输出 4000 万像素。
+    // 第一版暂定最多输出 4000 万像素。
     const bool allowed = pixels <= 40000000;
 
-    QString text = QString("目标尺寸：%1 × %2 px").arg(size.width()).arg(size.height());
+    const QString sizeText = QString("目标尺寸：%1 × %2 px").arg(size.width()).arg(size.height());
 
-    if (!allowed)
-    {
-        text += "\n超过本版 4000 万像素的输出限制";
-    }
-
-    ui->targetSizeLabel->setText(text);
+    // 提示按超限与否在两行内切换；标签高度固定，因此不会改变对话框高度。
+    ui->targetSizeLabel->setText(allowed
+                                     ? sizeText
+                                     : sizeText + "\n超过本版 4000 万像素的输出限制");
 
     ui->buttonBox->button(QDialogButtonBox::Ok)->setEnabled(allowed);
+
 }
 
 void ResizeDialog::resetSize()
@@ -239,20 +257,3 @@ void ResizeDialog::setTargetSize(const QSize &size)
     }
     updateMode();
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

@@ -22,6 +22,8 @@ public:
     QSize targetSize() const;
 
 private:
+    void setupFramelessWindow();
+
     void updateMode();
     void updateFromPercent();
     void updateFromWidth();
@@ -35,6 +37,7 @@ private:
     QSize originalSize_;
     QSize currentSize_;
     QSize aspectSize_;
+
 };
 
 #endif // RESIZEDIALOG_H
