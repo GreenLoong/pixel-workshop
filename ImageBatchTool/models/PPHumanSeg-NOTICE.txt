@@ -1,0 +1,15 @@
+PPHumanSeg model and inference reference
+Source: https://github.com/opencv/opencv_zoo/tree/47534e27c9851bb1128ccc0102f1145e27f23f98/models/human_segmentation_pphumanseg
+Model: human_segmentation_pphumanseg_2023mar.onnx (unmodified)
+SHA-256: 552d8a984054e59b5d773d24b9b12022b22046ceb2bbc4c9aaeaceb36a9ddf24
+Size: 6163938 bytes
+License: Apache License 2.0 (see PPHumanSeg-LICENSE.txt)
+Copyright (c) 2021 PaddlePaddle Authors. All Rights Reserved.
+Inference reference: pphumanseg.py
+Copyright (C) 2021, Shenzhen Institute of Artificial Intelligence and Robotics for Society, all rights reserved.
+Third party copyrights are property of their respective owners.
+
+Pixel Workshop changes:
+C++ RGB input, OpenCV DNN CPU inference, model byte loading from embedded Qt resources,
+per-thread Net reuse, foreground/background comparison after resizing, manual mask
+corrections and transparent PNG composition. Upstream ONNX weights are unmodified.

@@ -68,6 +68,18 @@ int main(int argc,char **argv) {
         require(!failed.error.isEmpty() && failed.success==0,"Invalid output directory was accepted");
         const QString unique=ImageFiles::saveUniquePng(rgba,temp.path()+"/result.png");
         require(ImageFiles::saveUniquePng(rgba,unique).endsWith("result(1).png"),"Shared single-image save lacks collision protection");
+        if(argc>1) {
+            QImage portrait(QString::fromLocal8Bit(argv[1]));require(!portrait.isNull(),"Portrait fixture unreadable");
+            const QString humans=temp.path()+"/portraits",humanOutput=temp.path()+"/human-output";
+            QDir().mkpath(humans);portrait.save(humans+"/person1.png");portrait.save(humans+"/person2.png");
+            ImageProcessor::Options removal;removal.background=ImageProcessor::BackgroundMode::Remove;
+            const auto humanResult=run(job,humans,humanOutput,removal);
+            require(humanResult.success==2 && humanResult.failed==0,"Human model batch failed");
+            const QImage output(humanOutput+"/person1-result.png");
+            require(output.pixelColor(output.width()/2,output.height()*.9).alpha()>240
+                && output.pixelColor(2,2).alpha()<10,"Human batch removed clothing or retained background");
+            std::cout<<"PASS: portrait segmentation in background batch worker\n";
+        }
         std::cout<<"PASS: background worker, responsive UI, Unicode paths, mixed failures, alpha, original protection, repeat runs and cancellation\n";
     }catch(const std::exception &e){std::cerr<<e.what()<<'\n';return 1;}
 }

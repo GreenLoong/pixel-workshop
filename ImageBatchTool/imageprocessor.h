@@ -3,10 +3,12 @@
 
 #include <opencv2/core.hpp>
 #include <vector>
+#include <memory>
 
 namespace ImageProcessor
 {
 enum class BackgroundMode { None, Blur, Remove, Replace };
+enum class SegmentationMethod { Human, Region };
 struct BrushStroke {
     std::vector<cv::Point2d> points; // 相对于处理后图片的归一化坐标。
     double radius = 0.025;
@@ -35,6 +37,8 @@ struct Options
     bool flipVertical = false;
     cv::Rect2d crop; // 旋转／翻转之后的归一化区域；空矩形表示不裁剪。
     BackgroundMode background = BackgroundMode::None;
+    SegmentationMethod segmentation = SegmentationMethod::Human;
+    std::shared_ptr<const std::vector<uchar>> humanModel; // Qt 适配层提供只读模型字节。
     cv::Rect2d foregroundRect{0.1,0.05,0.8,0.9};
     std::vector<BrushStroke> strokes;
     int feather = 2; // 在分割预览尺度上的羽化像素。

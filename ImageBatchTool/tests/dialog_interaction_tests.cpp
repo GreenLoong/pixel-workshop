@@ -283,6 +283,7 @@ int main(int argc, char **argv)
         QImage subject(80,80,QImage::Format_RGB888);subject.fill(QColor(20,35,210));
         for(int y=20;y<60;++y)for(int x=25;x<55;++x)subject.setPixelColor(x,y,QColor(220,70,40));
         ImageProcessor::Options bgOptions;bgOptions.background=ImageProcessor::BackgroundMode::Remove;bgOptions.feather=0;
+        bgOptions.segmentation=ImageProcessor::SegmentationMethod::Region;
         BackgroundDialog bgDialog(subject,bgOptions);bgDialog.show();
         require(bgDialog.windowFlags().testFlag(Qt::FramelessWindowHint),"Background dialog kept native title");
         require(bgDialog.options().foregroundRect.width<1,"Foreground region overwritten by initialization");
@@ -321,6 +322,26 @@ int main(int argc, char **argv)
         batchDialog.reject();batchTimeout.start(5000);batchLoop.exec();
         require(!job->isRunning() && batchDialog.result()==QDialog::Rejected,"Closing active batch did not safely cancel");
         std::cout<<"PASS: batch UI starts background task, freezes parameters and safely closes during cancellation\n";
+        if(argc>1) {
+            const QImage portrait(QString::fromLocal8Bit(argv[1]));require(!portrait.isNull(),"Portrait fixture unreadable");
+            ImageProcessor::Options humanOptions;humanOptions.background=ImageProcessor::BackgroundMode::Remove;
+            BackgroundDialog humanDialog(portrait,humanOptions);humanDialog.show();
+            auto *engine=humanDialog.findChild<QComboBox *>("segmentationMethod");
+            require(engine->currentIndex()==0,"Portrait model is not the default");
+            auto *brush=humanDialog.findChild<QComboBox *>("brushMode");
+            require(!(brush->model()->flags(brush->model()->index(0,0))&Qt::ItemIsEnabled),"Human mode allowed the old bounding-box background rule");
+            QEventLoop humanLoop;QTimer poll,timeout;timeout.setSingleShot(true);
+            auto *ok=humanDialog.findChild<QDialogButtonBox *>()->button(QDialogButtonBox::Ok);
+            QObject::connect(&poll,&QTimer::timeout,&humanLoop,[&]{if(ok->isEnabled())humanLoop.quit();});
+            QObject::connect(&timeout,&QTimer::timeout,&humanLoop,&QEventLoop::quit);
+            poll.start(10);timeout.start(5000);humanLoop.exec();require(ok->isEnabled(),"Human dialog preview failed");
+            humanDialog.grab().save("human-background-dialog.png");
+            engine->setCurrentIndex(1);
+            require(brush->model()->flags(brush->model()->index(0,0))&Qt::ItemIsEnabled,"Region mode did not restore bounding-box control");
+            humanDialog.reject();
+            require(humanOptions.segmentation==ImageProcessor::SegmentationMethod::Human,"Cancelled dialog changed original method");
+            std::cout<<"PASS: default portrait UI, independent region mode and cancellation\n";
+        }
     } catch (const std::exception &error) {
         std::cerr << error.what() << '\n';
         return 1;

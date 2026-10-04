@@ -18,6 +18,7 @@
 #include <QToolButton>
 #include <QVBoxLayout>
 #include <QIcon>
+#include <QStandardItemModel>
 #include <exception>
 
 void BrushPreview::append(QPoint point) {
@@ -63,7 +64,7 @@ BackgroundDialog::BackgroundDialog(const QImage &original,const ImageProcessor::
     auto *head=new QHBoxLayout;head->addWidget(heading,1);
     auto *close=new QToolButton(this);close->setObjectName("closeButton");close->setIcon(QIcon(":/indicators/close.svg"));
     close->setFixedSize(32,32);head->addWidget(close);body->addLayout(head);
-    auto *hint=new QLabel("先调整主体范围，再用“保留主体 / 删除背景”画笔修正。滚轮可缩放；浏览模式可拖动。",this);
+    auto *hint=new QLabel("人像模式自动识别人物与衣物；非人像请选择通用区域。画笔可修正保留 / 删除区域，滚轮可缩放。",this);
     hint->setWordWrap(true);hint->setObjectName("modeHint");body->addWidget(hint);
     auto *modes=new QHBoxLayout;
     auto *mode=new QComboBox(this);mode->setObjectName("backgroundMode");
@@ -76,6 +77,11 @@ BackgroundDialog::BackgroundDialog(const QImage &original,const ImageProcessor::
     auto *file=new QPushButton("选择背景图片",this);file->setAutoDefault(false);modes->addWidget(file);
     auto *reset=new QPushButton("重置背景",this);reset->setObjectName("resetBackgroundButton");reset->setAutoDefault(false);
     modes->addWidget(reset);modes->addStretch();body->addLayout(modes);
+    auto *engineRow=new QHBoxLayout;engineRow->addWidget(new QLabel("识别方式",this));
+    auto *engine=new QComboBox(this);engine->setObjectName("segmentationMethod");
+    engine->addItems({"人像（自动识别人物）","通用区域（手工选择范围）"});
+    engine->setCurrentIndex(options.segmentation==ImageProcessor::SegmentationMethod::Human?0:1);
+    engineRow->addWidget(engine);engineRow->addStretch();body->addLayout(engineRow);
     preview_->setObjectName("backgroundPreview");preview_->setCornerRadius(8);
     selection_->setParent(this);preview_->scene()->addItem(selection_);body->addWidget(preview_,1);
     auto *tools=new QHBoxLayout;
@@ -104,18 +110,29 @@ BackgroundDialog::BackgroundDialog(const QImage &original,const ImageProcessor::
         const auto result=watcher_.result();
         if(result.error.isEmpty()) {
             if(!preview_->painting && !selection_->isVisible())preview_->setImage(QPixmap::fromImage(result.image));
-            message_->setText("预览已更新。调整主体范围时框外必须包含背景；确定后应用到完整图片。");
+            message_->setText(working_.segmentation==ImageProcessor::SegmentationMethod::Human
+                ? "人像识别已更新，可用画笔修正边缘；确定后应用到完整图片。"
+                : "区域分割已更新。范围框外作为背景，主体必须完整包含在框内。");
         }else message_->setText("预览失败："+result.error);
         buttons_->button(QDialogButtonBox::Ok)->setEnabled(result.error.isEmpty());
     });
     const auto setBrushMode=[this](int index) {
-        selection_->setVisible(index==0);preview_->painting=index==1||index==2;preview_->foreground=index==1;
+        selection_->setVisible(index==0 && working_.segmentation==ImageProcessor::SegmentationMethod::Region);
+        preview_->painting=index==1||index==2;preview_->foreground=index==1;
         if(index!=3)preview_->setImage(QPixmap::fromImage(base_));
         preview_->setDragMode(preview_->painting?QGraphicsView::NoDrag:QGraphicsView::ScrollHandDrag);
         preview_->viewport()->setCursor(preview_->painting?Qt::CrossCursor:Qt::ArrowCursor);
         schedulePreview();
     };
     connect(brushMode,&QComboBox::currentIndexChanged,this,setBrushMode);
+    const auto setEngine=[this,engine,brushMode,setBrushMode] {
+        const bool human=engine->currentIndex()==0;
+        working_.segmentation=human?ImageProcessor::SegmentationMethod::Human:ImageProcessor::SegmentationMethod::Region;
+        static_cast<QStandardItemModel *>(brushMode->model())->item(0)->setEnabled(!human);
+        if(human && brushMode->currentIndex()==0)brushMode->setCurrentIndex(3);
+        setBrushMode(brushMode->currentIndex());
+    };
+    connect(engine,&QComboBox::currentIndexChanged,this,[setEngine]{setEngine();});
     connect(mode,&QComboBox::currentIndexChanged,this,[this,color,file,blur](int index) {
         working_.background=static_cast<ImageProcessor::BackgroundMode>(index+1);
         color->setEnabled(index==2);file->setEnabled(index==2);blur->setEnabled(index==0);schedulePreview();
@@ -157,7 +174,7 @@ BackgroundDialog::BackgroundDialog(const QImage &original,const ImageProcessor::
         const auto r=working_.foregroundRect;
         preview_->setImage(QPixmap::fromImage(base_));selection_->setBounds(preview_->sceneRect());
         selection_->setSelection(QRectF(r.x*base_.width(),r.y*base_.height(),r.width*base_.width(),r.height*base_.height()));
-        preview_->fitToWindow();brushMode->setCurrentIndex(3);schedulePreview();
+        preview_->fitToWindow();brushMode->setCurrentIndex(3);setEngine();schedulePreview();
     }catch(const std::exception &e){message_->setText(QString::fromUtf8(e.what()));buttons_->button(QDialogButtonBox::Ok)->setEnabled(false);}
 }
 BackgroundDialog::~BackgroundDialog(){watcher_.waitForFinished();}

@@ -110,6 +110,7 @@ int main()
         cv::Mat subject(80,80,CV_8UC3,cv::Scalar(20,35,210));
         for(int y=20;y<60;++y)for(int x=25;x<55;++x)subject.at<cv::Vec3b>(y,x)=cv::Vec3b(220,70,40);
         ImageProcessor::Options background;background.background=ImageProcessor::BackgroundMode::Remove;background.feather=0;
+        background.segmentation=ImageProcessor::SegmentationMethod::Region; // 几何色块验证通用分割。
         auto removed=ImageProcessor::process(subject,background);
         require(removed.channels()==4 && removed.at<cv::Vec4b>(0,0)[3]==0
             && removed.at<cv::Vec4b>(40,40)[3]==255,"Foreground segmentation failed");

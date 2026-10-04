@@ -14,7 +14,8 @@ find_package(Qt6 6.5 REQUIRED COMPONENTS Core Widgets Svg Concurrent)
 #core:cv::Mat 等基础数据结构。
 #imgproc：灰度转换、缩放等图像处理。
 #imgcodecs：图片读取和保存。
-find_package(OpenCV 4 REQUIRED COMPONENTS core imgproc imgcodecs)
+#dnn：本地 PPHumanSeg ONNX 人像分割推理。
+find_package(OpenCV 4.10 REQUIRED COMPONENTS core imgproc imgcodecs dnn)
 
 message(STATUS "OpenCV version: ${OpenCV_VERSION}")
 
@@ -29,6 +30,7 @@ qt_add_executable(ImageBatchTool
     imageprocessor.h
     imageprocessor.cpp
     backgroundprocessor.cpp backgrounddialog.cpp backgrounddialog.h
+    humansegmentation.cpp humansegmentation.h
     batchjob.cpp batchjob.h batchdialog.cpp batchdialog.h imagefiles.cpp imagefiles.h
     imageprocessing.h imageprocessing.cpp
     tonedialog.h tonedialog.cpp
@@ -76,7 +78,7 @@ install(SCRIPT ${deploy_script})
 option(IMAGEBATCHTOOL_BUILD_TESTS "Build image-processing checks" OFF)
 if(IMAGEBATCHTOOL_BUILD_TESTS)
     enable_testing()
-    add_executable(imageprocessor_tests tests/imageprocessor_tests.cpp imageprocessor.cpp backgroundprocessor.cpp)
+    add_executable(imageprocessor_tests tests/imageprocessor_tests.cpp imageprocessor.cpp backgroundprocessor.cpp humansegmentation.cpp)
     set_target_properties(imageprocessor_tests PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)
     target_compile_features(imageprocessor_tests PRIVATE cxx_std_17)
     if(MSVC)
@@ -95,6 +97,7 @@ if(IMAGEBATCHTOOL_BUILD_TESTS)
         geometrydialog.h geometrydialog.cpp selectionitem.h selectionitem.cpp
         imageprocessing.cpp imageprocessing.h imageprocessor.cpp imageprocessor.h
         backgroundprocessor.cpp backgrounddialog.cpp backgrounddialog.h
+        humansegmentation.cpp humansegmentation.h
         batchjob.cpp batchjob.h batchdialog.cpp batchdialog.h imagefiles.cpp imagefiles.h
         indicators.qrc)
     set_target_properties(dialog_interaction_tests PROPERTIES AUTORCC ON)
@@ -105,7 +108,8 @@ if(IMAGEBATCHTOOL_BUILD_TESTS)
     target_include_directories(dialog_interaction_tests PRIVATE ${OpenCV_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR})
     target_link_libraries(dialog_interaction_tests PRIVATE Qt::Widgets Qt::Svg Qt::Concurrent ${OpenCV_LIBS})
     add_test(NAME dialog_interaction_tests COMMAND dialog_interaction_tests)
-    qt_add_executable(batch_tests tests/batch_tests.cpp batchjob.cpp batchjob.h imageprocessing.cpp imagefiles.cpp imageprocessor.cpp backgroundprocessor.cpp)
+    qt_add_executable(batch_tests tests/batch_tests.cpp batchjob.cpp batchjob.h imageprocessing.cpp imagefiles.cpp imageprocessor.cpp backgroundprocessor.cpp humansegmentation.cpp indicators.qrc)
+    set_target_properties(batch_tests PROPERTIES AUTORCC ON)
     target_compile_features(batch_tests PRIVATE cxx_std_17)
     if(MSVC)
         target_compile_options(batch_tests PRIVATE /utf-8)
@@ -113,6 +117,15 @@ if(IMAGEBATCHTOOL_BUILD_TESTS)
     target_include_directories(batch_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${OpenCV_INCLUDE_DIRS})
     target_link_libraries(batch_tests PRIVATE Qt::Widgets ${OpenCV_LIBS})
     add_test(NAME batch_tests COMMAND batch_tests)
+    qt_add_executable(segmentation_tests tests/segmentation_tests.cpp imageprocessing.cpp imageprocessor.cpp backgroundprocessor.cpp humansegmentation.cpp indicators.qrc)
+    set_target_properties(segmentation_tests PROPERTIES AUTORCC ON)
+    target_compile_features(segmentation_tests PRIVATE cxx_std_17)
+    if(MSVC)
+        target_compile_options(segmentation_tests PRIVATE /utf-8)
+    endif()
+    target_include_directories(segmentation_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${OpenCV_INCLUDE_DIRS})
+    target_link_libraries(segmentation_tests PRIVATE Qt::Gui ${OpenCV_LIBS})
+    add_test(NAME segmentation_tests COMMAND segmentation_tests)
     # 本机验证目录含部署产生的 qt.conf，测试显式使用开发环境的离屏插件。
     get_target_property(_qt_core_library Qt::Core IMPORTED_LOCATION_RELEASE)
     get_filename_component(_qt_bin_directory "${_qt_core_library}" DIRECTORY)

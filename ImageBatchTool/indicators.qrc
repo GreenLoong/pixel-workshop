@@ -17,4 +17,7 @@
  <qresource prefix="/app">
   <file alias="icon.png">icons/app-icon.png</file>
  </qresource>
+ <qresource prefix="/models">
+  <file alias="human_segmentation_pphumanseg_2023mar.onnx" compress="0">models/human_segmentation_pphumanseg_2023mar.onnx</file>
+ </qresource>
 </RCC>

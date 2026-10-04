@@ -40,3 +40,7 @@ windeployqt 负责 Qt 依赖，额外的 OpenCV 运行库单独复制。插件�
 | 输出失败 | 检查输出目录权限和磁盘空间，结果表列出具体失败文件 |
 
 项目源码与说明：[pixel-workshop](https://github.com/GreenLoong/pixel-workshop)。
+
+## 人像模型更新（2026-10-04）
+
+PPHumanSeg 模型已嵌入可执行文件，运行时不依赖外部模型路径或 Python。构建包含 OpenCV dnn，打包脚本同时复制模型的许可证与来源说明。新增第四项模型测试，算法与验证见[人像分割算法替换](人像分割算法替换.md)。
