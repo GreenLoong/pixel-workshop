@@ -112,6 +112,7 @@ bool EditorPage::valid() const
 }
 void EditorPage::updateButtons()
 {
+    emit draftChanged();
     const bool pending=panel_ && !history_.empty() && !(options()==history_[index_].options);
     done_->setEnabled(valid());undo_->setEnabled(index_>0 || pending);
     redo_->setEnabled(!pending && index_+1<static_cast<int>(history_.size()));

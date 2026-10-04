@@ -5,6 +5,7 @@
 #include <QPixmap>
 #include <QSize>
 #include <QString>
+#include <functional>
 #include "domain/imageprocessor.h"
 
 QT_BEGIN_NAMESPACE
@@ -30,6 +31,7 @@ protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
     void changeEvent(QEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
+    void closeEvent(QCloseEvent *event) override;
 
 private slots:
     void openImage();
@@ -46,6 +48,10 @@ private slots:
 
 private:
     void setupMenus();
+    bool hasUnsavedChanges() const;
+    bool saveCurrentImage();
+    void resolveUnsaved(std::function<void()> continuation);
+    void updateModifiedState();
     void setProcessingBusy(bool busy);
     void cancelProcessing();
     void presentFullScreen(const QPixmap &image);
@@ -61,6 +67,8 @@ private:
     void refreshImageUi();
     bool applyProcessing(const ImageProcessor::Options &options, bool recordHistory = true);
 
+    std::function<void()> afterProcessing_;
+    bool closeAuthorized_=false;
     ImageTask *processing_;
     QPushButton *cancelProcessing_;
     bool busy_=false, fullscreenPending_=false, leaveAfterProcessing_=false;

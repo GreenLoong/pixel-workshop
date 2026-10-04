@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.19)
 
 set(CMAKE_USER_MAKE_RULES_OVERRIDE_CXX "${CMAKE_CURRENT_SOURCE_DIR}/cmake/MSVCDependencies.cmake")
-project(ImageBatchTool VERSION 0.15.0 LANGUAGES CXX)
+project(ImageBatchTool VERSION 0.16.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -91,7 +91,9 @@ if(IMAGEBATCHTOOL_BUILD_TESTS)
     target_link_libraries(imageconversion_tests PRIVATE pixel_infrastructure)
     qt_add_executable(imagetask_tests tests/imagetask_tests.cpp)
     target_link_libraries(imagetask_tests PRIVATE pixel_application pixel_resources)
-    foreach(test IN ITEMS imageprocessor_tests dialog_interaction_tests batch_tests segmentation_tests imageconversion_tests imagetask_tests)
+    qt_add_executable(unsaved_tests tests/unsaved_tests.cpp)
+    target_link_libraries(unsaved_tests PRIVATE pixel_presentation pixel_resources)
+    foreach(test IN ITEMS imageprocessor_tests dialog_interaction_tests batch_tests segmentation_tests imageconversion_tests imagetask_tests unsaved_tests)
         if(MSVC)
             target_compile_options(${test} PRIVATE /utf-8)
         endif()
@@ -101,7 +103,7 @@ if(IMAGEBATCHTOOL_BUILD_TESTS)
     get_target_property(_qt_core_library Qt::Core IMPORTED_LOCATION_RELEASE)
     get_filename_component(_qt_bin_directory "${_qt_core_library}" DIRECTORY)
     get_filename_component(_qt_install_directory "${_qt_bin_directory}" DIRECTORY)
-    set_tests_properties(dialog_interaction_tests batch_tests PROPERTIES
+    set_tests_properties(dialog_interaction_tests batch_tests unsaved_tests PROPERTIES
         ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_PLUGIN_PATH=${_qt_install_directory}/plugins;QT_QPA_PLATFORM_PLUGIN_PATH=${_qt_install_directory}/plugins/platforms"
         TIMEOUT 30)
 endif()

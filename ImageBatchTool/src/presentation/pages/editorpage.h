@@ -28,6 +28,7 @@ public:
 signals:
     void accepted();
     void cancelled();
+    void draftChanged();
 private:
     bool eventFilter(QObject *,QEvent *) override;
     void buildPanel(bool reusePreview=false);

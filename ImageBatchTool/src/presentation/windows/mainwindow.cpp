@@ -36,6 +36,8 @@
 #include <QDialog>
 #include <QGraphicsDropShadowEffect>
 #include <QResizeEvent>
+#include <QCloseEvent>
+#include <QTimer>
 #include <QUndoStack>
 #include <QUndoCommand>
 #include <functional>
@@ -67,6 +69,7 @@ MainWindow::MainWindow(QWidget *parent)
     editor_=new EditorPage(pages_);pages_->addWidget(editor_);
     setMinimumSize(1000,640);
     connect(editor_,&EditorPage::cancelled,this,&MainWindow::leaveEditor);
+    connect(editor_,&EditorPage::draftChanged,this,[this]{if(history_)updateModifiedState();});
     connect(editor_,&EditorPage::accepted,this,[this] {
         applyProcessing(editor_->options());
     });
@@ -86,6 +89,7 @@ MainWindow::MainWindow(QWidget *parent)
     updateWindowFrame();
 
     setupMenus();
+    connect(history_,&QUndoStack::cleanChanged,this,&MainWindow::updateModifiedState);
     processing_=new ImageTask(this);
     cancelProcessing_=new QPushButton("取消处理",this);
     cancelProcessing_->setObjectName("cancelProcessingButton");cancelProcessing_->hide();
@@ -93,6 +97,7 @@ MainWindow::MainWindow(QWidget *parent)
     connect(cancelProcessing_,&QPushButton::clicked,this,&MainWindow::cancelProcessing);
     connect(processing_,&ImageTask::completed,this,[this](const QImage &image,const QString &error) {
         if(!error.isEmpty()) {
+            afterProcessing_={};
             historyApplyGuard_=true;history_->setIndex(committedHistoryIndex_);historyApplyGuard_=false;
             setProcessingBusy(false);
             QMessageBox::warning(this,"处理失败",error);return;
@@ -110,6 +115,8 @@ MainWindow::MainWindow(QWidget *parent)
         if(leave)leaveEditor();
         refreshImageUi();
         statusBar()->showMessage(QString("处理完成：%1 × %2 px").arg(processed.width()).arg(processed.height()));
+        auto continuation=std::move(afterProcessing_);afterProcessing_={};
+        if(continuation)continuation();
     });
     auto *brand=new QWidget(this);
     auto *brandLayout=new QHBoxLayout(brand);brandLayout->setContentsMargins(0,0,0,0);brandLayout->setSpacing(10);
@@ -156,6 +163,11 @@ MainWindow::MainWindow(QWidget *parent)
 
 MainWindow::~MainWindow()
 {
+    // 子控件释放时仍会发出状态信号，先断开依赖派生成员的回调。
+    disconnect(editor_,nullptr,this,nullptr);
+    disconnect(history_,nullptr,this,nullptr);
+    disconnect(processing_,nullptr,this,nullptr);
+    editor_->end();
     delete ui;
 }
 
@@ -406,6 +418,7 @@ void MainWindow::applyTheme()
 void MainWindow::openImage()
 {
     if(busy_)return;
+    if(afterProcessing_)return;
     QSettings settings;
     QString directory = settings.value("files/lastOpenDirectory").toString();
     if (!QDir(directory).exists() || directory.isEmpty())
@@ -433,14 +446,15 @@ void MainWindow::openImage()
         return;
     }
 
-    // 只有图片读取成功才更新目录；取消或失败保留上次记录。
-    settings.setValue("files/lastOpenDirectory", QFileInfo(filePath).absolutePath());
-
+    resolveUnsaved([this,image,filePath] {
+    if(pages_->currentWidget()==editor_)leaveEditor();
+    // 只有成功替换当前图片后才更新目录。
+    QSettings().setValue("files/lastOpenDirectory", QFileInfo(filePath).absolutePath());
     originalImage = image;
     currentImage = image;
     currentFilePath = filePath;
     processingOptions_ = {};
-    history_->clear();committedHistoryIndex_=0;
+    history_->clear();history_->setClean();committedHistoryIndex_=0;closeAuthorized_=false;
 
     refreshImageUi();
     ui->imageLabel->fitToWindow();
@@ -449,6 +463,7 @@ void MainWindow::openImage()
                                  .arg(QFileInfo(filePath).fileName())
                                  .arg(image.width())
                                  .arg(image.height()));
+    });
 }
 
 // 更新图片大小
@@ -502,7 +517,8 @@ void MainWindow::updateImageInfo()
                               ? QStringLiteral("图像处理工具")
                               : QString("%1 - 图像处理工具").arg(QFileInfo(currentFilePath).fileName());
 
-    setWindowTitle(title);
+    setWindowTitle(title+"[*]");
+    updateModifiedState();
 }
 
 // 根据当前状态启用或禁用按钮
@@ -547,28 +563,26 @@ void MainWindow::restoreOriginal()
 void MainWindow::saveImage()
 {
     if(busy_)return;
-    if (currentImage.isNull())
-    {
-        QMessageBox::information(this, "提示", "请先打开一张图片");
-        return;
-    }
-
+    saveCurrentImage();
+}
+bool MainWindow::saveCurrentImage()
+{
+    if(currentImage.isNull())return false;
     // 不会弹出是否覆盖已有文件对话框
     QString outputPath = QFileDialog::getSaveFileName(this, "保存处理结果", "result.png", "PNG 图片(*.png)", nullptr, QFileDialog::DontConfirmOverwrite);
 
-    // 取消保存
-    if (outputPath.isEmpty())
-        return;
+    // 取消保存不能标记为已保存，也不能继续关闭或替换图片。
+    if (outputPath.isEmpty())return false;
 
     try {
         outputPath = ImageFiles::saveUniquePng(currentImage.toImage(), outputPath);
     } catch(const std::exception &error) {
         QMessageBox::warning(this,"保存失败",QString::fromUtf8(error.what()));
-        return;
+        return false;
     }
     statusBar()->showMessage(QString("已保存：%1").arg(outputPath), 5000);
 
-    QMessageBox::information(this, "保存成功", "图片保存到: \n" + outputPath);
+    history_->setClean();updateModifiedState();return true;
 }
 
 void MainWindow::showResizeDialog()
@@ -607,7 +621,7 @@ void MainWindow::leaveEditor()
     for(auto *action:actions())action->setEnabled(true);
     findChild<QAction *>("undoAction")->setEnabled(history_->canUndo());
     findChild<QAction *>("redoAction")->setEnabled(history_->canRedo());
-    updateActionState();
+    updateActionState();updateModifiedState();
 }
 
 void MainWindow::showBatchDialog()
@@ -639,7 +653,7 @@ void MainWindow::setProcessingBusy(bool busy)
 }
 void MainWindow::cancelProcessing()
 {
-    processing_->cancel();
+    processing_->cancel();afterProcessing_={};
     historyApplyGuard_=true;history_->setIndex(committedHistoryIndex_);historyApplyGuard_=false;
     setProcessingBusy(false);statusBar()->showMessage("已取消处理，保留上一次结果",5000);
 }
@@ -650,4 +664,48 @@ bool MainWindow::applyProcessing(const ImageProcessor::Options &options,bool rec
     leaveAfterProcessing_=pages_->currentWidget()==editor_;
     setProcessingBusy(true);processing_->submit(originalImage.toImage(),options);
     return true;
+}
+
+bool MainWindow::hasUnsavedChanges() const
+{
+    return !currentImage.isNull() && (!history_->isClean()
+        || (pages_->currentWidget()==editor_ && !(editor_->options()==processingOptions_)));
+}
+void MainWindow::updateModifiedState()
+{
+    const bool modified=hasUnsavedChanges();setWindowModified(modified);
+    if(auto *caption=findChild<QLabel *>("windowCaption"))
+        caption->setText(modified?"  Pixel Workshop · 未保存":"  Pixel Workshop");
+}
+void MainWindow::resolveUnsaved(std::function<void()> continuation)
+{
+    if(afterProcessing_)return;
+    if(!hasUnsavedChanges()) {if(busy_)cancelProcessing();continuation();return;}
+    QMessageBox prompt(QMessageBox::Question,"尚未保存","当前图片有未保存的修改。是否先保存？",
+                       QMessageBox::Save|QMessageBox::Discard|QMessageBox::Cancel,this);
+    prompt.setObjectName("unsavedChangesDialog");prompt.setDefaultButton(QMessageBox::Save);
+    prompt.setEscapeButton(QMessageBox::Cancel);
+    prompt.button(QMessageBox::Save)->setText("保存");
+    prompt.button(QMessageBox::Discard)->setText("放弃修改");
+    prompt.button(QMessageBox::Cancel)->setText("取消");
+    const auto choice=prompt.exec();
+    if(choice==QMessageBox::Cancel)return;
+    if(choice==QMessageBox::Discard) {if(busy_)cancelProcessing();continuation();return;}
+    if(pages_->currentWidget()==editor_ && !(editor_->options()==processingOptions_)) {
+        const auto draft=editor_->options();if(busy_)cancelProcessing();
+        afterProcessing_=[this,continuation=std::move(continuation)] {if(saveCurrentImage())continuation();};
+        if(!applyProcessing(draft)){afterProcessing_={};return;}
+        leaveAfterProcessing_=false;return;
+    }
+    if(busy_)cancelProcessing();
+    if(saveCurrentImage())continuation();
+}
+void MainWindow::closeEvent(QCloseEvent *event)
+{
+    if(closeAuthorized_ || (!hasUnsavedChanges() && !afterProcessing_)) {
+        if(busy_)cancelProcessing();
+        closeAuthorized_=false;event->accept();return;
+    }
+    event->ignore();
+    resolveUnsaved([this] {closeAuthorized_=true;QTimer::singleShot(0,this,&QWidget::close);});
 }
