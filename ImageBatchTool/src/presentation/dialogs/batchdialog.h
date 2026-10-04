@@ -7,6 +7,7 @@ class QLabel;
 class QProgressBar;
 class QPushButton;
 class QTableWidget;
+class BatchParameters;
 class BatchDialog final : public QDialog {
     Q_OBJECT
 public:
@@ -16,7 +17,7 @@ private:
     void start();
     void exportReport();
     void setRunning(bool running);
-    ImageProcessor::Options options_;
+    BatchParameters *parameters_;
     BatchJob job_;
     QLineEdit *input_,*output_;
     QLabel *status_;

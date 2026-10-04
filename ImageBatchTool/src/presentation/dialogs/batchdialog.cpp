@@ -1,5 +1,6 @@
 #include "presentation/dialogs/batchdialog.h"
 #include "presentation/widgets/dialogappearance.h"
+#include "presentation/widgets/batchparameters.h"
 #include <QFileDialog>
 #include <QFile>
 #include <QHeaderView>
@@ -18,11 +19,11 @@
 #include <QDir>
 
 BatchDialog::BatchDialog(const ImageProcessor::Options &options,QWidget *parent)
-    :QDialog(parent),options_(options),job_(this),input_(new QLineEdit(this)),output_(new QLineEdit(this)),
+    :QDialog(parent),parameters_(new BatchParameters(options,this)),job_(this),input_(new QLineEdit(this)),output_(new QLineEdit(this)),
       status_(new QLabel(this)),progress_(new QProgressBar(this)),start_(new QPushButton("开始处理",this)),
       cancel_(new QPushButton("取消任务",this)),report_(new QPushButton("导出报告",this)),table_(new QTableWidget(this))
 {
-    setObjectName("BatchDialog");resize(960,700);setMinimumSize(780,560);
+    setObjectName("BatchDialog");resize(1000,820);setMinimumSize(840,660);
     auto *root=new QVBoxLayout(this);root->setContentsMargins(12,12,12,12);root->setSpacing(0);
     auto *content=new QWidget(this);content->setObjectName("contentPanel");root->addWidget(content,1);
     auto *body=new QVBoxLayout(content);body->setContentsMargins(24,20,24,20);body->setSpacing(16);
@@ -30,7 +31,7 @@ BatchDialog::BatchDialog(const ImageProcessor::Options &options,QWidget *parent)
     auto *header=new QHBoxLayout;header->addWidget(heading,1);
     auto *close=new QToolButton(this);close->setObjectName("closeButton");close->setIcon(QIcon(":/indicators/close.svg"));
     close->setFixedSize(32,32);header->addWidget(close);body->addLayout(header);
-    auto *hint=new QLabel("使用打开本页时的编辑参数，逐张处理所选目录中的图片。输出 PNG，保留原文件，同名自动编号。",this);
+    auto *hint=new QLabel("独立设置批量参数或使用预设，逐张处理当前目录中的图片。输出 PNG，保留原文件，同名自动编号。",this);
     hint->setObjectName("modeHint");hint->setWordWrap(true);body->addWidget(hint);
     QSettings settings;
     input_->setObjectName("batchInput");output_->setObjectName("batchOutput");
@@ -43,14 +44,7 @@ BatchDialog::BatchDialog(const ImageProcessor::Options &options,QWidget *parent)
         });body->addLayout(row);
     };
     directoryRow("输入目录",input_);directoryRow("输出目录",output_);
-    QStringList summary;
-    if(options.grayscale)summary<<"灰度";
-    if(options.targetSize!=cv::Size())summary<<QString("尺寸 %1 × %2").arg(options.targetSize.width).arg(options.targetSize.height);
-    if(options.rotation!=0 || options.flipHorizontal || options.flipVertical || options.crop!=cv::Rect2d())summary<<"裁剪 / 旋转 / 翻转";
-    if(options.hasColorAdjustments() || options.brightness!=0 || options.contrast!=1)summary<<"颜色与光线";
-    if(options.background!=ImageProcessor::BackgroundMode::None)summary<<"背景编辑";
-    auto *parameters=new QLabel("本次参数："+(summary.isEmpty()?QString("保持原图，转换为 PNG"):summary.join(" · ")),this);
-    parameters->setWordWrap(true);body->addWidget(parameters);
+    body->addWidget(parameters_);
     status_->setText("等待开始。不递归扫描子目录；批量裁剪与画笔按每张图片的相对位置应用。");
     status_->setWordWrap(true);body->addWidget(status_);progress_->setObjectName("batchProgress");
     progress_->setRange(0,1);progress_->setValue(0);body->addWidget(progress_);
@@ -83,6 +77,7 @@ BatchDialog::BatchDialog(const ImageProcessor::Options &options,QWidget *parent)
     });
 }
 void BatchDialog::setRunning(bool running) {
+    parameters_->setEnabled(!running);
     start_->setEnabled(!running);cancel_->setEnabled(running);input_->setEnabled(!running);output_->setEnabled(!running);
     report_->setEnabled(!running && table_->rowCount()>0);
     for(auto *button:findChildren<QPushButton *>())if(button->property("directoryChooser").toBool())button->setEnabled(!running);
@@ -91,7 +86,7 @@ void BatchDialog::start() {
     if(input_->text().trimmed().isEmpty() || output_->text().trimmed().isEmpty()) {status_->setText("请选择输入和输出文件夹。");return;}
     table_->setRowCount(0);progress_->setRange(0,0);closeWhenFinished_=false;setRunning(true);status_->setText("正在扫描图片…");
     QSettings settings;settings.setValue("batch/input",input_->text().trimmed());settings.setValue("batch/output",output_->text().trimmed());
-    job_.start(input_->text().trimmed(),output_->text().trimmed(),options_);
+    job_.start(input_->text().trimmed(),output_->text().trimmed(),parameters_->parameters());
 }
 void BatchDialog::reject() {
     if(job_.isRunning()) {closeWhenFinished_=true;job_.cancel();cancel_->setEnabled(false);status_->setText("正在取消，完成当前图片后关闭…");return;}

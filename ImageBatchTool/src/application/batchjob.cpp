@@ -11,7 +11,7 @@ class BatchWorker final : public QObject {
     Q_OBJECT
 public:
     QString input,output;
-    ImageProcessor::Options options;
+    BatchProcessing::Parameters parameters;
     std::shared_ptr<std::atomic_bool> cancelled;
 signals:
     void planned(int total);
@@ -43,6 +43,7 @@ public slots:
                     QImageReader reader(path);reader.setAutoTransform(true);
                     const QImage original=reader.read();
                     if(original.isNull())throw std::runtime_error(("读取失败："+reader.errorString()).toUtf8().constData());
+                    const auto options=parameters.forImage(cv::Size(original.width(),original.height()));
                     const auto image=ImageProcessing::processImage(original,options);
                     if(cancelled->load())break; // 当前处理完成后安全取消，不再写入。
                     item.output=ImageFiles::saveUniquePng(image,QDir(destination).filePath(QFileInfo(path).completeBaseName()+"-result.png"));
@@ -62,9 +63,12 @@ BatchJob::~BatchJob() {
 }
 void BatchJob::cancel(){if(cancel_)cancel_->store(true);}
 bool BatchJob::start(const QString &input,const QString &output,const ImageProcessor::Options &options) {
+    return start(input,output,BatchProcessing::Parameters::fromOptions(options));
+}
+bool BatchJob::start(const QString &input,const QString &output,const BatchProcessing::Parameters &parameters) {
     if(isRunning())return false;
     thread_=new QThread(this);cancel_=std::make_shared<std::atomic_bool>(false);
-    auto *worker=new BatchWorker;worker->input=input;worker->output=output;worker->options=options;worker->cancelled=cancel_;
+    auto *worker=new BatchWorker;worker->input=input;worker->output=output;worker->parameters=parameters;worker->cancelled=cancel_;
     worker->moveToThread(thread_);
     connect(thread_,&QThread::started,worker,&BatchWorker::run);
     connect(worker,&BatchWorker::planned,this,&BatchJob::planned);

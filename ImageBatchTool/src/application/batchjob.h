@@ -1,6 +1,6 @@
 #ifndef BATCHJOB_H
 #define BATCHJOB_H
-#include "domain/imageprocessor.h"
+#include "domain/batchoptions.h"
 #include <QObject>
 #include <QString>
 #include <QThread>
@@ -15,6 +15,7 @@ public:
     explicit BatchJob(QObject *parent=nullptr);
     ~BatchJob() override;
     bool start(const QString &input,const QString &output,const ImageProcessor::Options &options);
+    bool start(const QString &input,const QString &output,const BatchProcessing::Parameters &parameters);
     void cancel();
     bool isRunning() const {return thread_!=nullptr;}
 signals:

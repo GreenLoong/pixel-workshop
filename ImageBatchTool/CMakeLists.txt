@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.19)
 
 set(CMAKE_USER_MAKE_RULES_OVERRIDE_CXX "${CMAKE_CURRENT_SOURCE_DIR}/cmake/MSVCDependencies.cmake")
-project(ImageBatchTool VERSION 0.16.0 LANGUAGES CXX)
+project(ImageBatchTool VERSION 0.17.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -18,6 +18,7 @@ qt_standard_project_setup()
 # 源文件只在所属模块列举一次，应用和测试链接同一实现。
 add_library(pixel_domain STATIC
     src/domain/imageprocessor.cpp src/domain/imageprocessor.h
+    src/domain/batchoptions.cpp src/domain/batchoptions.h
     src/domain/geometryprocessor.cpp
     src/domain/backgroundprocessor.cpp
     src/domain/humansegmentation.cpp src/domain/humansegmentation.h)
@@ -26,6 +27,7 @@ target_include_directories(pixel_domain PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src"
 target_link_libraries(pixel_domain PUBLIC ${OpenCV_LIBS})
 
 add_library(pixel_infrastructure STATIC
+    src/infrastructure/batchpresets.cpp src/infrastructure/batchpresets.h
     src/infrastructure/imagefiles.cpp src/infrastructure/imagefiles.h
     src/infrastructure/imageconversion.cpp src/infrastructure/imageconversion.h
     src/infrastructure/modelresources.cpp src/infrastructure/modelresources.h)
@@ -44,6 +46,7 @@ add_library(pixel_presentation STATIC
     src/presentation/dialogs/geometrydialog.cpp src/presentation/dialogs/geometrydialog.h
     src/presentation/dialogs/resizedialog.cpp src/presentation/dialogs/resizedialog.h src/presentation/dialogs/resizedialog.ui
     src/presentation/dialogs/tonedialog.cpp src/presentation/dialogs/tonedialog.h
+    src/presentation/widgets/batchparameters.cpp src/presentation/widgets/batchparameters.h
     src/presentation/widgets/dialogappearance.cpp src/presentation/widgets/dialogappearance.h
     src/presentation/widgets/previewlabel.cpp src/presentation/widgets/previewlabel.h
     src/presentation/widgets/selectionitem.cpp src/presentation/widgets/selectionitem.h
@@ -93,7 +96,9 @@ if(IMAGEBATCHTOOL_BUILD_TESTS)
     target_link_libraries(imagetask_tests PRIVATE pixel_application pixel_resources)
     qt_add_executable(unsaved_tests tests/unsaved_tests.cpp)
     target_link_libraries(unsaved_tests PRIVATE pixel_presentation pixel_resources)
-    foreach(test IN ITEMS imageprocessor_tests dialog_interaction_tests batch_tests segmentation_tests imageconversion_tests imagetask_tests unsaved_tests)
+    qt_add_executable(batch_parameters_tests tests/batch_parameters_tests.cpp)
+    target_link_libraries(batch_parameters_tests PRIVATE pixel_presentation pixel_resources)
+    foreach(test IN ITEMS imageprocessor_tests dialog_interaction_tests batch_tests segmentation_tests imageconversion_tests imagetask_tests unsaved_tests batch_parameters_tests)
         if(MSVC)
             target_compile_options(${test} PRIVATE /utf-8)
         endif()
@@ -103,7 +108,7 @@ if(IMAGEBATCHTOOL_BUILD_TESTS)
     get_target_property(_qt_core_library Qt::Core IMPORTED_LOCATION_RELEASE)
     get_filename_component(_qt_bin_directory "${_qt_core_library}" DIRECTORY)
     get_filename_component(_qt_install_directory "${_qt_bin_directory}" DIRECTORY)
-    set_tests_properties(dialog_interaction_tests batch_tests unsaved_tests PROPERTIES
+    set_tests_properties(dialog_interaction_tests batch_tests unsaved_tests batch_parameters_tests PROPERTIES
         ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_PLUGIN_PATH=${_qt_install_directory}/plugins;QT_QPA_PLATFORM_PLUGIN_PATH=${_qt_install_directory}/plugins/platforms"
         TIMEOUT 30)
 endif()
