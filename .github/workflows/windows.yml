@@ -49,6 +49,7 @@ jobs:
           "-DCMAKE_PREFIX_PATH=$env:QT_ROOT_DIR"
           "-DOpenCV_DIR=$env:OPENCV_ROOT"
           -DIMAGEBATCHTOOL_BUILD_TESTS=ON
+          -DIMAGEBATCHTOOL_BUILD_PACKAGE_CHECKS=ON
       - name: Build
         run: cmake --build build-ci --parallel 2
       - name: Test
