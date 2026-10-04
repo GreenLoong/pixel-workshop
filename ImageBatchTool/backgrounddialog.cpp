@@ -162,7 +162,7 @@ BackgroundDialog::BackgroundDialog(const QImage &original,const ImageProcessor::
         const auto result=watcher_.result();
         if(result.error.isEmpty()) {
             result_=result.image;mask_=result.mask;presentPreview();
-            message_->setText(working_.segmentation==ImageProcessor::SegmentationMethod::Human
+            message_->setText(!result.notice.isEmpty()?result.notice:working_.segmentation==ImageProcessor::SegmentationMethod::Human
                 ? "人像识别已更新，可用画笔修正边缘；确定后应用到完整图片。"
                 : "区域分割已更新。范围框外作为背景，主体必须完整包含在框内。");
         }else message_->setText("预览失败："+result.error);
@@ -268,6 +268,16 @@ void BackgroundDialog::startPreview() {
     watcher_.setFuture(QtConcurrent::run([source,options,needsMask] {
         PreviewResult result;
         try{
+            if(options.segmentation==ImageProcessor::SegmentationMethod::Region
+                && (options.background!=ImageProcessor::BackgroundMode::None || needsMask)) {
+                const auto samples=ImageProcessor::regionSamples(cv::Size(source.width(),source.height()),options);
+                if(samples.background==0)
+                    result.notice="当前没有背景标记，已保留整张图片。请缩小主体范围，或用“删除背景”画笔标出一部分背景。";
+                else if(samples.foreground==0)
+                    result.notice="主体已被全部标为背景。可撤销笔触，或用“保留主体”画笔补回需要保留的区域。";
+                else if(!samples.canSegment())
+                    result.notice="当前范围或画笔标记太少，暂按手工蒙版预览。请扩大主体范围，或补画主体和背景后继续自动识别。";
+            }
             result.image=ImageProcessing::processImage(source,options);
             if(options.background==ImageProcessor::BackgroundMode::Remove)result.mask=result.image;
             else if(needsMask){auto maskOptions=options;maskOptions.background=ImageProcessor::BackgroundMode::Remove;

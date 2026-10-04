@@ -7,6 +7,7 @@
 #include "batchdialog.h"
 #include <QFontDatabase>
 #include <QLineEdit>
+#include <QLabel>
 #include <QEventLoop>
 #include <QDoubleSpinBox>
 #include <QApplication>
@@ -353,6 +354,16 @@ int main(int argc, char **argv)
         };
         waitPreview();
         auto *bgPreview=bgDialog.findChild<PreviewLabel *>("backgroundPreview");
+        auto *region=bgDialog.findChild<SelectionItem *>();
+        const auto initialRegion=region->selection();
+        bgDialog.findChild<QPushButton *>("rangeSelectionButton")->setChecked(true);
+        region->setSelection(bgPreview->sceneRect());waitPreview();
+        require(bgDialog.findChild<QLabel *>("backgroundMessage")->text().contains("没有背景标记"),
+                "Full selection should give actionable guidance instead of OpenCV error");
+        region->setSelection(initialRegion);waitPreview();
+        require(bgDialog.findChild<QLabel *>("backgroundMessage")->text().startsWith("区域分割已更新"),
+                "Region segmentation did not recover after shrinking full selection");
+        bgDialog.findChild<QPushButton *>("rangeSelectionButton")->setChecked(false);waitPreview();
         QImage transparent;
         for(auto *item:bgPreview->scene()->items())if(auto *p=qgraphicsitem_cast<QGraphicsPixmapItem *>(item))transparent=p->pixmap().toImage();
         require(transparent.pixelColor(0,0).alpha()==0 && transparent.pixelColor(40,40).alpha()==255,"Background preview alpha incorrect");

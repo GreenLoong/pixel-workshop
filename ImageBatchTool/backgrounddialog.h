@@ -38,7 +38,7 @@ public:
 signals:
     void optionsChanged();
 private:
-    struct PreviewResult {QImage image,mask;QString error;};
+    struct PreviewResult {QImage image,mask;QString error,notice;};
     void schedulePreview();
     void startPreview();
     void presentPreview();

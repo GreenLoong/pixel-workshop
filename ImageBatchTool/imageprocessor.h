@@ -72,6 +72,12 @@ cv::Mat process(const cv::Mat &rgb, const Options &options);
 cv::Mat transformGeometry(const cv::Mat &source, const Options &options);
 cv::Mat adjustColor(const cv::Mat &rgb, const Options &options);
 cv::Mat processBackground(const cv::Mat &source, const Options &options);
+struct RegionSamples {
+    int foreground=0, background=0;
+    bool canSegment() const { return foreground>=5 && background>=5; }
+};
+// 与区域分割使用相同的缩略尺寸和画笔规则，供界面解释手工蒙版回退。
+RegionSamples regionSamples(cv::Size imageSize,const Options &options);
 cv::Mat adjustTone(const cv::Mat &source, int brightness, double contrast);
 // 输入：8 位、三通道 RGB 图片。
 // 输出：同尺寸的8位、单通道灰度图片。

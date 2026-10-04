@@ -5,6 +5,11 @@
 #include <cmath>
 
 namespace {
+cv::Size segmentationSize(cv::Size size)
+{
+    const double scale=std::min(1.0,1024.0/std::max(size.width,size.height));
+    return cv::Size(std::max(2,cvRound(size.width*scale)),std::max(2,cvRound(size.height*scale)));
+}
 void applyStrokes(cv::Mat &mask,const std::vector<ImageProcessor::BrushStroke> &strokes,bool grabCutLabels)
 {
     for(const auto &stroke:strokes) {
@@ -22,23 +27,39 @@ void applyStrokes(cv::Mat &mask,const std::vector<ImageProcessor::BrushStroke> &
         }
     }
 }
-cv::Mat segmentRegion(const cv::Mat &rgb,const ImageProcessor::Options &o)
+cv::Mat regionMask(cv::Size size,const ImageProcessor::Options &o)
 {
     const auto &r=o.foregroundRect;
     if(!std::isfinite(r.x+r.y+r.width+r.height) || r.x<0 || r.y<0 || r.width<=0 || r.height<=0
-        || r.x+r.width>1 || r.y+r.height>1 || rgb.rows<3 || rgb.cols<3)
-        CV_Error(cv::Error::StsBadArg,"Invalid foreground region or image too small");
-    cv::Mat mask(rgb.size(),CV_8UC1,cv::Scalar(cv::GC_BGD));
-    const int x=std::clamp(cvRound(r.x*rgb.cols),0,rgb.cols-2);
-    const int y=std::clamp(cvRound(r.y*rgb.rows),0,rgb.rows-2);
-    const int w=std::clamp(cvRound(r.width*rgb.cols),1,rgb.cols-x);
-    const int h=std::clamp(cvRound(r.height*rgb.rows),1,rgb.rows-y);
-    mask(cv::Rect(x,y,w,h)).setTo(cv::GC_PR_FGD);applyStrokes(mask,o.strokes,true);
-    if(cv::countNonZero(mask==cv::GC_BGD)<5 || cv::countNonZero((mask==cv::GC_PR_FGD)|(mask==cv::GC_FGD))<5)
-        CV_Error(cv::Error::StsBadArg,"Keep both foreground and background samples in the region/brush mask");
+        || r.x+r.width>1.000001 || r.y+r.height>1.000001 || size.empty())
+        CV_Error(cv::Error::StsBadArg,"Invalid foreground region");
+    cv::Mat mask(size,CV_8UC1,cv::Scalar(cv::GC_BGD));
+    const int x=std::clamp(cvRound(r.x*size.width),0,size.width-1);
+    const int y=std::clamp(cvRound(r.y*size.height),0,size.height-1);
+    const int w=std::clamp(cvRound(r.width*size.width),1,size.width-x);
+    const int h=std::clamp(cvRound(r.height*size.height),1,size.height-y);
+    mask(cv::Rect(x,y,w,h)).setTo(cv::GC_PR_FGD);
+    applyStrokes(mask,o.strokes,true);
+    return mask;
+}
+ImageProcessor::RegionSamples countSamples(const cv::Mat &mask)
+{
+    return {cv::countNonZero((mask==cv::GC_PR_FGD)|(mask==cv::GC_FGD)),cv::countNonZero(mask==cv::GC_BGD)};
+}
+cv::Mat segmentRegion(const cv::Mat &rgb,const ImageProcessor::Options &o)
+{
+    cv::Mat mask=regionMask(rgb.size(),o);
+    // 全选、极小范围或画笔覆盖整类样本时，无法初始化 GrabCut 的两组模型。
+    // 保留用户的手工标记，不凭空添加背景点，也不将可继续编辑的状态当成异常。
+    if(!countSamples(mask).canSegment())return (mask==cv::GC_FGD)|(mask==cv::GC_PR_FGD);
     cv::Mat bgModel,fgModel;cv::grabCut(rgb,mask,cv::Rect(),bgModel,fgModel,3,cv::GC_INIT_WITH_MASK);
     return (mask==cv::GC_FGD)|(mask==cv::GC_PR_FGD);
 }
+}
+ImageProcessor::RegionSamples ImageProcessor::regionSamples(cv::Size imageSize,const Options &options)
+{
+    if(imageSize.empty())CV_Error(cv::Error::StsBadArg,"Empty image");
+    return countSamples(regionMask(segmentationSize(imageSize),options));
 }
 cv::Mat ImageProcessor::processBackground(const cv::Mat &source,const Options &o)
 {
@@ -48,7 +69,7 @@ cv::Mat ImageProcessor::processBackground(const cv::Mat &source,const Options &o
     cv::Mat rgb;
     if(source.channels()==4)cv::cvtColor(source,rgb,cv::COLOR_RGBA2RGB);else rgb=source;
     const double scale=std::min(1.0,1024.0/std::max(rgb.cols,rgb.rows));
-    cv::Mat small;cv::resize(rgb,small,cv::Size(std::max(2,cvRound(rgb.cols*scale)),std::max(2,cvRound(rgb.rows*scale))));
+    cv::Mat small;cv::resize(rgb,small,segmentationSize(rgb.size()));
     cv::Mat alpha;
     if(o.segmentation==SegmentationMethod::Human) {
         alpha=segmentHuman(small,o.humanModel);
