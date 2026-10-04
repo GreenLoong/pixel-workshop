@@ -5,6 +5,7 @@
 #include "selectionitem.h"
 #include <QDoubleSpinBox>
 #include <QApplication>
+#include <QAction>
 #include <QDialogButtonBox>
 #include <QComboBox>
 #include <QDir>
@@ -255,6 +256,24 @@ int main(int argc, char **argv)
         require(handled && QSettings().value("files/lastOpenDirectory").toString() == second,
                 "Cancel lost the last successful directory");
         std::cout << "PASS: persisted open directory, repeated opening and cancel\n";
+        auto *undo=window.findChild<QAction *>("undoAction");
+        auto *redo=window.findChild<QAction *>("redoAction");
+        require(!undo->isEnabled(),"New image kept old history");
+        QMetaObject::invokeMethod(&window,"converToGrayscale");
+        require(undo->isEnabled() && previewImage(dialog).isNull()==false,"No undo after edit");
+        undo->trigger();
+        auto imageFromMain=[&] {
+            for(auto *item:mainPreview->scene()->items())
+                if(auto *p=qgraphicsitem_cast<QGraphicsPixmapItem *>(item))return p->pixmap().toImage();
+            return QImage();
+        };
+        require(imageFromMain().pixelColor(0,0)==QColor(Qt::red),"Undo did not restore color");
+        redo->trigger();
+        require(imageFromMain().pixelColor(0,0).red()==76,"Redo did not restore grayscale");
+        QMetaObject::invokeMethod(&window,"restoreOriginal");
+        undo->trigger();
+        require(imageFromMain().pixelColor(0,0).red()==76,"Restore cannot be undone");
+        std::cout<<"PASS: edit undo/redo and undo original restoration\n";
     } catch (const std::exception &error) {
         std::cerr << error.what() << '\n';
         return 1;

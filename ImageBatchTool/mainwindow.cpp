@@ -38,11 +38,27 @@
 #include <QDialog>
 #include <QGraphicsDropShadowEffect>
 #include <QResizeEvent>
+#include <QUndoStack>
+#include <QUndoCommand>
+#include <functional>
 
 
 
 namespace
 {
+
+class ParameterCommand final : public QUndoCommand {
+public:
+    ParameterCommand(const ImageProcessor::Options &before,const ImageProcessor::Options &after,
+                     std::function<void(const ImageProcessor::Options &)> apply)
+        : before_(before),after_(after),apply_(std::move(apply)) {setText("图像编辑");}
+    void undo() override {apply_(before_);}
+    void redo() override {if(first_)first_=false;else apply_(after_);}
+private:
+    ImageProcessor::Options before_,after_;
+    std::function<void(const ImageProcessor::Options &)> apply_;
+    bool first_=true;
+};
 
 // 主界面配色与样式。所有颜色集中在这里，方便统一调整。
 const char *const kThemeStyleSheet = R"(
@@ -487,6 +503,14 @@ void MainWindow::setupMenus()
     exitAction->setShortcut(QKeySequence::Quit);
     connect(exitAction, &QAction::triggered, this, &MainWindow::close);
     QMenu *edit = menuBar()->addMenu("编辑(&E)");
+    edit->setObjectName("editMenu");
+    history_=new QUndoStack(this);
+    history_->setUndoLimit(50);
+    auto *undo=history_->createUndoAction(this,"撤销");
+    undo->setObjectName("undoAction"); undo->setShortcut(QKeySequence::Undo);
+    auto *redo=history_->createRedoAction(this,"重做");
+    redo->setObjectName("redoAction"); redo->setShortcuts({QKeySequence::Redo,QKeySequence("Ctrl+Shift+Z")});
+    edit->addAction(undo);edit->addAction(redo);edit->addSeparator();
     auto *geometry = edit->addAction("裁剪与旋转…");
     geometry->setShortcut(QKeySequence("Ctrl+R"));
     connect(geometry,&QAction::triggered,this,&MainWindow::showGeometryDialog);
@@ -540,6 +564,7 @@ void MainWindow::openImage()
     currentImage = image;
     currentFilePath = filePath;
     processingOptions_ = {};
+    history_->clear();
 
     refreshImageUi();
     ui->imageLabel->fitToWindow();
@@ -612,6 +637,7 @@ void MainWindow::updateActionState()
     ui->grayscaleButton->setEnabled(hasImage && !processingOptions_.grayscale);
     ui->toneButton->setEnabled(hasImage);
     ui->restoreButton->setEnabled(hasImage && modified);
+    if(auto *edit=findChild<QMenu *>("editMenu"))edit->setEnabled(hasImage);
 }
 
 // 灰度化
@@ -634,10 +660,7 @@ void MainWindow::restoreOriginal()
     if (originalImage.isNull())
         return;
 
-    processingOptions_ = {};
-    currentImage = originalImage;
-
-    refreshImageUi();
+    applyProcessing({});
 
     statusBar()->showMessage("已恢复为原图");
 }
@@ -753,18 +776,23 @@ void MainWindow::refreshImageUi()
     updatePreview();
 }
 
-bool MainWindow::applyProcessing(const ImageProcessor::Options &options)
+bool MainWindow::applyProcessing(const ImageProcessor::Options &options, bool recordHistory)
 {
     if (originalImage.isNull())
         return false;
     try {
-        QPixmap processed = QPixmap::fromImage(
-            ImageProcessing::processImage(originalImage.toImage(), options));
+        const auto before=processingOptions_;
+        QPixmap processed = options.isIdentity(cv::Size(originalImage.width(),originalImage.height()))
+            ?originalImage:QPixmap::fromImage(ImageProcessing::processImage(originalImage.toImage(), options));
         if (processed.isNull())
             throw std::runtime_error("Unable to create the output pixmap");
         // 结果成功后一起提交图片和参数，失败时保留上一份有效状态。
         currentImage = processed;
         processingOptions_ = options;
+        if(recordHistory)
+            history_->push(new ParameterCommand(before,options,[this](const auto &state) {
+                applyProcessing(state,false);
+            }));
         refreshImageUi();
         statusBar()->showMessage(QString("处理完成：%1 × %2 px")
                                  .arg(processed.width()).arg(processed.height()));

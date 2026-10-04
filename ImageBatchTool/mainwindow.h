@@ -12,6 +12,7 @@ namespace Ui {
 class MainWindow;
 }
 QT_END_NAMESPACE
+class QUndoStack;
 
 class MainWindow : public QMainWindow
 {
@@ -46,7 +47,7 @@ private:
     void updateImageInfo();
     void updateActionState();
     void refreshImageUi();
-    bool applyProcessing(const ImageProcessor::Options &options);
+    bool applyProcessing(const ImageProcessor::Options &options, bool recordHistory = true);
 
     Ui::MainWindow *ui;
     QWidget *windowFrame_ = nullptr;
@@ -56,6 +57,7 @@ private:
     QString currentFilePath;    // 当前图片路径
 
     ImageProcessor::Options processingOptions_;
+    QUndoStack *history_ = nullptr;
 };
 
 #endif // MAINWINDOW_H
