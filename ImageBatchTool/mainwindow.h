@@ -36,6 +36,7 @@ private slots:
     void showToneDialog();
     void showGeometryDialog();
     void showBackgroundDialog();
+    void showBatchDialog();
     void showFullScreenPreview();
 
 private:

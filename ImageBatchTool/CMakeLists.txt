@@ -29,6 +29,7 @@ qt_add_executable(ImageBatchTool
     imageprocessor.h
     imageprocessor.cpp
     backgroundprocessor.cpp backgrounddialog.cpp backgrounddialog.h
+    batchjob.cpp batchjob.h batchdialog.cpp batchdialog.h imagefiles.cpp imagefiles.h
     imageprocessing.h imageprocessing.cpp
     tonedialog.h tonedialog.cpp
     dialogappearance.h dialogappearance.cpp
@@ -94,6 +95,7 @@ if(IMAGEBATCHTOOL_BUILD_TESTS)
         geometrydialog.h geometrydialog.cpp selectionitem.h selectionitem.cpp
         imageprocessing.cpp imageprocessing.h imageprocessor.cpp imageprocessor.h
         backgroundprocessor.cpp backgrounddialog.cpp backgrounddialog.h
+        batchjob.cpp batchjob.h batchdialog.cpp batchdialog.h imagefiles.cpp imagefiles.h
         indicators.qrc)
     set_target_properties(dialog_interaction_tests PROPERTIES AUTORCC ON)
     target_compile_features(dialog_interaction_tests PRIVATE cxx_std_17)
@@ -103,11 +105,19 @@ if(IMAGEBATCHTOOL_BUILD_TESTS)
     target_include_directories(dialog_interaction_tests PRIVATE ${OpenCV_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR})
     target_link_libraries(dialog_interaction_tests PRIVATE Qt::Widgets Qt::Svg Qt::Concurrent ${OpenCV_LIBS})
     add_test(NAME dialog_interaction_tests COMMAND dialog_interaction_tests)
+    qt_add_executable(batch_tests tests/batch_tests.cpp batchjob.cpp batchjob.h imageprocessing.cpp imagefiles.cpp imageprocessor.cpp backgroundprocessor.cpp)
+    target_compile_features(batch_tests PRIVATE cxx_std_17)
+    if(MSVC)
+        target_compile_options(batch_tests PRIVATE /utf-8)
+    endif()
+    target_include_directories(batch_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${OpenCV_INCLUDE_DIRS})
+    target_link_libraries(batch_tests PRIVATE Qt::Widgets ${OpenCV_LIBS})
+    add_test(NAME batch_tests COMMAND batch_tests)
     # 本机验证目录含部署产生的 qt.conf，测试显式使用开发环境的离屏插件。
     get_target_property(_qt_core_library Qt::Core IMPORTED_LOCATION_RELEASE)
     get_filename_component(_qt_bin_directory "${_qt_core_library}" DIRECTORY)
     get_filename_component(_qt_install_directory "${_qt_bin_directory}" DIRECTORY)
-    set_tests_properties(dialog_interaction_tests PROPERTIES
+    set_tests_properties(dialog_interaction_tests batch_tests PROPERTIES
         ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_PLUGIN_PATH=${_qt_install_directory}/plugins;QT_QPA_PLATFORM_PLUGIN_PATH=${_qt_install_directory}/plugins/platforms"
         TIMEOUT 30)
 endif()

@@ -4,6 +4,9 @@
 #include "geometrydialog.h"
 #include "selectionitem.h"
 #include "backgrounddialog.h"
+#include "batchdialog.h"
+#include <QFontDatabase>
+#include <QLineEdit>
 #include <QEventLoop>
 #include <QDoubleSpinBox>
 #include <QApplication>
@@ -96,6 +99,7 @@ int main(int argc, char **argv)
 {
     QApplication::setAttribute(Qt::AA_DontUseNativeDialogs);
     QApplication app(argc, argv);
+    QFontDatabase::addApplicationFont("C:/Windows/Fonts/msyh.ttc"); // 离屏平台的中文截图。
     QApplication::setStyle(QStyleFactory::create("Fusion"));
     std::cout << std::unitbuf;
     app.setOrganizationName("PixelWorkshopTests");
@@ -304,6 +308,19 @@ int main(int argc, char **argv)
         bgDialog.reject();
         require(bgOptions.strokes.empty(),"Cancelled dialog changed input options");
         std::cout<<"PASS: asynchronous background preview, alpha, mask initialization and cancel protection\n";
+        BatchDialog batchDialog(options);batchDialog.show();app.processEvents();batchDialog.grab().save("batch-dialog.png");
+        require(batchDialog.windowFlags().testFlag(Qt::FramelessWindowHint),"Batch dialog kept native title");
+        batchDialog.findChild<QLineEdit *>("batchInput")->setText(second);
+        batchDialog.findChild<QLineEdit *>("batchOutput")->setText(temp.path()+"/batch-output");
+        batchDialog.findChild<QPushButton *>("confirmButton")->click();
+        require(!batchDialog.findChild<QLineEdit *>("batchInput")->isEnabled(),"Batch parameters editable during task");
+        auto *job=batchDialog.findChild<BatchJob *>();require(job && job->isRunning(),"Batch UI did not start worker");
+        QEventLoop batchLoop;QTimer batchTimeout;batchTimeout.setSingleShot(true);
+        QObject::connect(&batchTimeout,&QTimer::timeout,&batchLoop,&QEventLoop::quit);
+        QObject::connect(job,&BatchJob::finished,&batchLoop,&QEventLoop::quit);
+        batchDialog.reject();batchTimeout.start(5000);batchLoop.exec();
+        require(!job->isRunning() && batchDialog.result()==QDialog::Rejected,"Closing active batch did not safely cancel");
+        std::cout<<"PASS: batch UI starts background task, freezes parameters and safely closes during cancellation\n";
     } catch (const std::exception &error) {
         std::cerr << error.what() << '\n';
         return 1;

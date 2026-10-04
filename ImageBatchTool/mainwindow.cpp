@@ -4,6 +4,8 @@
 #include "tonedialog.h"
 #include "geometrydialog.h"
 #include "backgrounddialog.h"
+#include "batchdialog.h"
+#include "imagefiles.h"
 #include "sliderstyle.h"
 #include <exception>
 #include <stdexcept>
@@ -128,6 +130,10 @@ QToolButton { background: transparent; border: none; border-radius: 6px; padding
 QToolButton:hover { background: #eef2ff; color: #2f6bff; }
 QToolButton:pressed { background: #dce7ff; }
 QToolButton:disabled { color: #b3b8c2; }
+QToolButton#editImageButton { background: #eef2ff; border: 1px solid #d8e2ff; color: #2f6bff; padding: 8px 14px; }
+QToolButton#editImageButton:hover { background: #e0e9ff; border-color: #b6caff; }
+QToolButton#editImageButton:disabled { background: #f7f8fa; color: #b3b8c2; border-color: #e6e8ec; }
+QToolButton#editImageButton::menu-indicator { image: url(:/indicators/chevron-down.svg); width: 12px; height: 12px; subcontrol-position: right center; right: 12px; }
 QToolButton#closeWindowButton:hover { background: #e5484d; }
 QToolButton#closeWindowButton:pressed { background: #fde2e4; }
 QComboBox#zoomPercent {
@@ -204,6 +210,14 @@ MainWindow::MainWindow(QWidget *parent)
     updateWindowFrame();
 
     setupMenus();
+    auto *editButton=new QToolButton(this);
+    editButton->setObjectName("editImageButton");editButton->setText("编辑图片");
+    editButton->setMenu(findChild<QMenu *>("editMenu"));editButton->setPopupMode(QToolButton::InstantPopup);
+    editButton->setSizePolicy(QSizePolicy::Expanding,QSizePolicy::Fixed);editButton->setMinimumHeight(40);
+    ui->adjustLayout->insertWidget(0,editButton);
+    ui->resizeButton->hide();ui->grayscaleButton->hide();ui->toneButton->hide();
+    auto *batchButton=new QPushButton("文件夹批量处理",this);batchButton->setObjectName("batchButton");
+    ui->adjustLayout->addWidget(batchButton);connect(batchButton,&QPushButton::clicked,this,&MainWindow::showBatchDialog);
     applyTheme();
     setupZoomControls();
     setupWindowControls();
@@ -497,6 +511,9 @@ void MainWindow::setupMenus()
     QAction *saveAction = fileMenu->addAction("另存为(&S)...");
     saveAction->setShortcut(QKeySequence::Save);
     connect(saveAction, &QAction::triggered, this, &MainWindow::saveImage);
+    auto *batch=fileMenu->addAction("文件夹批量处理…");
+    batch->setShortcut(QKeySequence("Ctrl+Shift+B"));
+    connect(batch,&QAction::triggered,this,&MainWindow::showBatchDialog);
 
     fileMenu->addSeparator();
 
@@ -523,7 +540,8 @@ void MainWindow::setupMenus()
     auto *size = edit->addAction("调整大小…");
     connect(size,&QAction::triggered,this,&MainWindow::showResizeDialog);
     auto *gray = edit->addAction("灰度化");
-    connect(gray,&QAction::triggered,this,&MainWindow::converToGrayscale);
+    gray->setObjectName("grayscaleAction");gray->setCheckable(true);
+    connect(gray,&QAction::triggered,this,[this](bool enabled){auto options=processingOptions_;options.grayscale=enabled;applyProcessing(options);});
 }
 
 // 应用整体风格
@@ -606,6 +624,11 @@ void MainWindow::updateImageInfo()
 
     QStringList adjustments;
     if (processingOptions_.grayscale) adjustments << "已灰度化";
+    if (processingOptions_.rotation!=0) adjustments<<QString("旋转 %1°").arg(processingOptions_.rotation);
+    if (processingOptions_.crop!=cv::Rect2d())adjustments<<"已裁剪";
+    if (processingOptions_.flipHorizontal || processingOptions_.flipVertical)adjustments<<"已翻转";
+    if (processingOptions_.background!=ImageProcessor::BackgroundMode::None)adjustments<<"已编辑背景";
+    if (processingOptions_.hasColorAdjustments())adjustments<<"已调整颜色";
     if (processingOptions_.brightness != 0)
         adjustments << QString("亮度 %1").arg(processingOptions_.brightness);
     if (processingOptions_.contrast != 1.0)
@@ -642,6 +665,8 @@ void MainWindow::updateActionState()
     ui->toneButton->setEnabled(hasImage);
     ui->restoreButton->setEnabled(hasImage && modified);
     if(auto *edit=findChild<QMenu *>("editMenu"))edit->setEnabled(hasImage);
+    findChild<QToolButton *>("editImageButton")->setEnabled(hasImage);
+    findChild<QAction *>("grayscaleAction")->setChecked(processingOptions_.grayscale);
 }
 
 // 灰度化
@@ -689,47 +714,12 @@ void MainWindow::saveImage()
     if (!outputPath.endsWith(".png", Qt::CaseInsensitive))
         outputPath += ".png";
 
-    const QString basePath = outputPath.left(outputPath.size() - 4);
-
-    QFile outputFile;
-    int number = 1;
-
-    while (true)
-    {
-        outputFile.setFileName(outputPath);
-
-        // 尝试创建新文件，避免覆盖已有文件
-        if (outputFile.open(QIODevice::WriteOnly | QIODevice::NewOnly))
-            break;
-
-        // 同名文件存在，生成下一个候选名称
-        if (QFile::exists(outputPath))
-        {
-            outputPath = QString("%1(%2).png").arg(basePath).arg(number);
-            ++number;
-            continue;
-        }
-
-        // 文件不存在却创建失败，可能是因为目录或者权限问题
-        QMessageBox::warning(this, "保存失败", "无法保存文件: \n" + outputPath + "\n" + outputFile.errorString());
+    try {
+        outputPath = ImageFiles::saveUniquePng(currentImage.toImage(), outputPath);
+    } catch(const std::exception &error) {
+        QMessageBox::warning(this,"保存失败",QString::fromUtf8(error.what()));
         return;
     }
-
-    // 保存完整处理结果，不使用标签里的缩小预览
-    if (!currentImage.save(&outputFile, "PNG"))
-    {
-        outputFile.close();
-
-        // 清除本次创建但未保存成功的文件
-        const bool removed = outputFile.remove();
-
-        QMessageBox::warning(this, "保存失败", removed ? "图片写入失败，请检查磁盘空间和目录权限" : "图片写入失败，且未能删除不完整文件，请检查输出目录");
-
-        return;
-    }
-
-    outputFile.close();
-
     statusBar()->showMessage(QString("已保存：%1").arg(outputPath), 5000);
 
     QMessageBox::information(this, "保存成功", "图片保存到: \n" + outputPath);
@@ -778,6 +768,12 @@ void MainWindow::showBackgroundDialog()
     if(originalImage.isNull())return;
     BackgroundDialog dialog(originalImage.toImage(),processingOptions_,this);
     if(dialog.exec()==QDialog::Accepted)applyProcessing(dialog.options());
+}
+
+void MainWindow::showBatchDialog()
+{
+    BatchDialog dialog(processingOptions_,this);
+    dialog.exec();
 }
 
 void MainWindow::refreshImageUi()
