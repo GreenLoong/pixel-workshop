@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>ResizePanel</class>
+ <widget class="QWidget" name="ResizePanel">
+  <property name="geometry">
+   <rect><x>0</x><y>0</y><width>280</width><height>560</height></rect>
+  </property>
+  <layout class="QVBoxLayout" name="rootLayout">
+   <property name="spacing"><number>16</number></property>
+   <property name="leftMargin"><number>10</number></property>
+   <property name="topMargin"><number>12</number></property>
+   <property name="rightMargin"><number>10</number></property>
+   <property name="bottomMargin"><number>12</number></property>
+   <item>
+    <widget class="QFrame" name="summaryPanel">
+     <property name="minimumSize"><size><width>0</width><height>175</height></size></property>
+     <property name="maximumSize"><size><width>16777215</width><height>175</height></size></property>
+     <layout class="QVBoxLayout" name="summaryLayout">
+      <property name="spacing"><number>10</number></property>
+      <property name="leftMargin"><number>16</number></property>
+      <property name="topMargin"><number>16</number></property>
+      <property name="rightMargin"><number>16</number></property>
+      <property name="bottomMargin"><number>16</number></property>
+      <item>
+       <widget class="QLabel" name="originalSizeLabel">
+        <property name="text"><string>原图尺寸：—</string></property>
+        <property name="wordWrap"><bool>true</bool></property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="currentSizeLabel">
+        <property name="text"><string>当前尺寸：—</string></property>
+        <property name="wordWrap"><bool>true</bool></property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="targetSizeLabel">
+        <property name="minimumSize"><size><width>0</width><height>54</height></size></property>
+        <property name="text"><string>目标尺寸：—</string></property>
+        <property name="wordWrap"><bool>true</bool></property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="modeHeading">
+     <property name="text"><string>调整方式</string></property>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="modeLayout">
+     <item>
+      <widget class="QRadioButton" name="percentRadioButton">
+       <property name="text"><string>按百分比</string></property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QRadioButton" name="pixelRadioButton">
+       <property name="text"><string>按像素</string></property>
+       <property name="checked"><bool>true</bool></property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QLabel" name="sizeHeading">
+     <property name="text"><string>图像大小</string></property>
+    </widget>
+   </item>
+   <item>
+    <layout class="QGridLayout" name="inputLayout" columnstretch="0,1">
+     <property name="horizontalSpacing"><number>16</number></property>
+     <property name="verticalSpacing"><number>8</number></property>
+     <item row="0" column="0">
+      <widget class="QLabel" name="percentSpinBoxLabel">
+       <property name="text"><string>缩放比例</string></property>
+       <property name="buddy"><cstring>percentSpinBox</cstring></property>
+      </widget>
+     </item>
+     <item row="0" column="1">
+      <widget class="QSpinBox" name="percentSpinBox">
+       <property name="toolTip"><string>以本次进入尺寸模式时的当前尺寸为基准</string></property>
+       <property name="enabled"><bool>false</bool></property>
+       <property name="buttonSymbols"><enum>QAbstractSpinBox::NoButtons</enum></property>
+       <property name="suffix"><string> %</string></property>
+       <property name="minimum"><number>1</number></property>
+       <property name="maximum"><number>200</number></property>
+       <property name="value"><number>100</number></property>
+      </widget>
+     </item>
+     <item row="1" column="0">
+      <widget class="QLabel" name="widthSpinBoxLabel">
+       <property name="text"><string>宽度</string></property>
+       <property name="buddy"><cstring>widthSpinBox</cstring></property>
+      </widget>
+     </item>
+     <item row="1" column="1">
+      <widget class="QSpinBox" name="widthSpinBox">
+       <property name="buttonSymbols"><enum>QAbstractSpinBox::NoButtons</enum></property>
+       <property name="suffix"><string> px</string></property>
+       <property name="minimum"><number>1</number></property>
+       <property name="maximum"><number>2147483647</number></property>
+      </widget>
+     </item>
+     <item row="2" column="0">
+      <widget class="QLabel" name="heightSpinBoxLabel">
+       <property name="text"><string>高度</string></property>
+       <property name="buddy"><cstring>heightSpinBox</cstring></property>
+      </widget>
+     </item>
+     <item row="2" column="1">
+      <widget class="QSpinBox" name="heightSpinBox">
+       <property name="buttonSymbols"><enum>QAbstractSpinBox::NoButtons</enum></property>
+       <property name="suffix"><string> px</string></property>
+       <property name="minimum"><number>1</number></property>
+       <property name="maximum"><number>2147483647</number></property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QCheckBox" name="keepAspectCheckBox">
+     <property name="text"><string>保持宽高比</string></property>
+     <property name="checked"><bool>true</bool></property>
+    </widget>
+   </item>
+   <item>
+    <layout class="QVBoxLayout" name="resetLayout">
+     <item>
+      <widget class="QPushButton" name="resetSizeButton">
+       <property name="text"><string>重置本次调整</string></property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="restoreOriginalSizeButton">
+       <property name="text"><string>恢复原图尺寸</string></property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <spacer name="bottomSpacer">
+     <property name="orientation"><enum>Qt::Vertical</enum></property>
+     <property name="sizeHint"><size><width>0</width><height>0</height></size></property>
+    </spacer>
+   </item>
+  </layout>
+ </widget>
+ <tabstops>
+  <tabstop>percentRadioButton</tabstop>
+  <tabstop>pixelRadioButton</tabstop>
+  <tabstop>percentSpinBox</tabstop>
+  <tabstop>widthSpinBox</tabstop>
+  <tabstop>heightSpinBox</tabstop>
+  <tabstop>keepAspectCheckBox</tabstop>
+  <tabstop>resetSizeButton</tabstop>
+  <tabstop>restoreOriginalSizeButton</tabstop>
+ </tabstops>
+ <resources/>
+ <connections/>
+</ui>

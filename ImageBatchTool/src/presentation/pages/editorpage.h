@@ -5,7 +5,6 @@
 #include <QImage>
 #include <QTimer>
 #include <vector>
-class QDialog;
 class QVBoxLayout;
 class QButtonGroup;
 class QPushButton;
@@ -38,7 +37,8 @@ private:
     QImage original_;
     ImageProcessor::Options draft_;
     Mode mode_=Crop;
-    QDialog *panel_=nullptr;
+    QWidget *panel_=nullptr;
+    bool resizePreviewPending_=false;
     QWidget *host_;
     QVBoxLayout *body_;
     BrushPreview *preview_;

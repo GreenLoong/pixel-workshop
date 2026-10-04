@@ -1,6 +1,7 @@
 #include "presentation/windows/mainwindow.h"
 #include "presentation/dialogs/tonedialog.h"
 #include "presentation/widgets/previewlabel.h"
+#include "presentation/widgets/resizepanel.h"
 #include "presentation/dialogs/geometrydialog.h"
 #include "presentation/widgets/selectionitem.h"
 #include "presentation/dialogs/backgrounddialog.h"
@@ -134,6 +135,28 @@ int main(int argc, char **argv)
     try {
         if (!temp.isValid())
             throw std::runtime_error(temp.errorString().toStdString());
+        ResizePanel resizePanel(QSize(2400,1600),QSize(960,640));
+        auto *resizeWidth=resizePanel.findChild<QSpinBox *>("widthSpinBox");
+        auto *resizeHeight=resizePanel.findChild<QSpinBox *>("heightSpinBox");
+        resizePanel.findChild<QRadioButton *>("percentRadioButton")->setChecked(true);
+        resizePanel.findChild<QSpinBox *>("percentSpinBox")->setValue(50);
+        require(resizePanel.targetSize()==QSize(480,320),"Percent resize did not use the current size");
+        resizePanel.findChild<QRadioButton *>("pixelRadioButton")->setChecked(true);
+        resizeWidth->setValue(300);
+        require(resizePanel.targetSize()==QSize(300,200),"Resize width aspect ratio failed");
+        resizeHeight->setValue(400);
+        require(resizePanel.targetSize()==QSize(600,400),"Resize height aspect ratio failed");
+        resizePanel.findChild<QCheckBox *>("keepAspectCheckBox")->setChecked(false);
+        resizeHeight->setValue(100);
+        require(resizePanel.targetSize()==QSize(600,100),"Independent resize axes failed");
+        resizePanel.findChild<QPushButton *>("restoreOriginalSizeButton")->click();
+        require(resizePanel.targetSize()==QSize(2400,1600),"Original size restoration failed");
+        resizeWidth->setValue(30000);
+        require(!resizePanel.isValid(),"Oversized resize was accepted");
+        resizePanel.findChild<QPushButton *>("resetSizeButton")->click();
+        require(resizePanel.targetSize()==QSize(960,640) && resizePanel.isValid(),"Resize reset failed");
+        require(!resizePanel.findChild<QDialogButtonBox *>(),"Resize panel retains hidden dialog buttons");
+        std::cout<<"PASS: resize panel percent, aspect ratio, independent axes, reset and output limit\n";
         QImage original(2400, 1600, QImage::Format_RGB888);
         original.fill(Qt::red);
         ImageProcessor::Options options;
@@ -353,7 +376,16 @@ int main(int argc, char **argv)
         require(editorPage->options().brightness==25,"Changing mode discarded tone draft");
         editorPage->findChild<QSpinBox *>("widthSpinBox")->setValue(300);
         require(editorPage->options().targetSize==cv::Size(300,200),"Embedded resize aspect ratio failed");
+        waitFor(editorReady);
         editorPage->grab().save("editor-size.png");
+        editorPage->findChild<QCheckBox *>("keepAspectCheckBox")->setChecked(false);
+        editorPage->findChild<QSpinBox *>("widthSpinBox")->setValue(30000);
+        editorPage->findChild<QSpinBox *>("heightSpinBox")->setValue(30000);
+        require(!editorReady(),"Editor allowed an oversized resize");
+        editorPage->selectMode(EditorPage::Tone);
+        require(editorPage->findChild<ResizePanel *>(),"Invalid resize allowed leaving its panel");
+        editorPage->findChild<QSpinBox *>("widthSpinBox")->setValue(300);
+        editorPage->findChild<QSpinBox *>("heightSpinBox")->setValue(200);
         waitFor(editorReady);editorPage->selectMode(EditorPage::Crop);app.processEvents();waitFor(editorReady);
         require(editorPage->options().targetSize==cv::Size(300,200),"Entering crop silently reset target size");
         editorPage->undo();waitFor(editorReady);

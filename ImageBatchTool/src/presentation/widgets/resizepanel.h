@@ -1,26 +1,26 @@
-#ifndef RESIZEDIALOG_H
-#define RESIZEDIALOG_H
+#ifndef RESIZEPANEL_H
+#define RESIZEPANEL_H
 
-#include <QDialog>
+#include <QWidget>
 #include <QSize>
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
-class ResizeDialog;
+class ResizePanel;
 }
 QT_END_NAMESPACE
 
-class ResizeDialog : public QDialog
+class ResizePanel final : public QWidget
 {
     Q_OBJECT
 
 public:
-    explicit ResizeDialog(const QSize &originalSize, const QSize &currentSize, QWidget *parent = nullptr);
+    explicit ResizePanel(const QSize &originalSize, const QSize &currentSize, QWidget *parent = nullptr);
 
-    ~ResizeDialog() override;
+    ~ResizePanel() override;
 
     QSize targetSize() const;
-    void embedInEditor();
+    bool isValid() const;
 signals:
     void targetSizeChanged(QSize size);
 
@@ -34,7 +34,7 @@ private:
     void restoreOriginalSize();
     void setTargetSize(const QSize &size);
 
-    Ui::ResizeDialog *ui;
+    Ui::ResizePanel *ui;
     QSize originalSize_;
     QSize currentSize_;
     QSize aspectSize_;
@@ -42,4 +42,4 @@ private:
 
 };
 
-#endif // RESIZEDIALOG_H
+#endif // RESIZEPANEL_H

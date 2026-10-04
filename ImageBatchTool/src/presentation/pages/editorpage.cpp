@@ -1,7 +1,7 @@
 #include "presentation/pages/editorpage.h"
 #include "presentation/dialogs/geometrydialog.h"
 #include "presentation/dialogs/tonedialog.h"
-#include "presentation/dialogs/resizedialog.h"
+#include "presentation/widgets/resizepanel.h"
 #include "presentation/dialogs/backgrounddialog.h"
 #include "presentation/widgets/dialogappearance.h"
 #include "application/imagetask.h"
@@ -10,6 +10,7 @@
 #include "presentation/widgets/previewimage.h"
 #include <QAbstractButton>
 #include <QButtonGroup>
+#include <QDialog>
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
 #include <QFile>
@@ -98,7 +99,7 @@ ImageProcessor::Options EditorPage::options() const
     if(auto *p=qobject_cast<ToneDialog *>(panel_))return p->options();
     if(auto *p=qobject_cast<BackgroundDialog *>(panel_))return p->options();
     auto result=draft_;
-    if(auto *p=qobject_cast<ResizeDialog *>(panel_)) {
+    if(auto *p=qobject_cast<ResizePanel *>(panel_)) {
         const auto size=p->targetSize();
         // 没有改动尺寸时，保留空 targetSize 的原始语义。
         if(size!=p->property("entrySize").toSize())result.targetSize=cv::Size(size.width(),size.height());
@@ -107,6 +108,8 @@ ImageProcessor::Options EditorPage::options() const
 }
 bool EditorPage::valid() const
 {
+    if(auto *resize=qobject_cast<ResizePanel *>(panel_))
+        return resize->isValid() && !resizePreviewPending_;
     auto *box=panel_?panel_->findChild<QDialogButtonBox *>():nullptr;
     return box && box->button(QDialogButtonBox::Ok)->isEnabled();
 }
@@ -167,6 +170,7 @@ void EditorPage::buildPanel(bool reusePreview)
     // 只替换参数面板；常驻画布不隐藏、不重新创建，也不排入一次延迟缩放。
     setUpdatesEnabled(false);
     panel_=nullptr;
+    resizePreviewPending_=false;
     while(auto *item=body_->takeAt(0)){delete item->widget();delete item;}
     preview_->painting=false;preview_->onStroke={};preview_->viewport()->unsetCursor();
     preview_->setDragMode(QGraphicsView::ScrollHandDrag);
@@ -181,28 +185,31 @@ void EditorPage::buildPanel(bool reusePreview)
             const auto size=ImageProcessor::geometrySize(cv::Size(original_.width(),original_.height()),draft_);
             current=QSize(size.width,size.height);
         }
-        auto *resize=new ResizeDialog(original_.size(),current,host_);panel_=resize;
-        panel_->setProperty("entrySize",current);resize->embedInEditor();
+        auto *resize=new ResizePanel(original_.size(),current,host_);panel_=resize;
+        panel_->setProperty("entrySize",current);
         auto source=PreviewImage::thumbnail(original_);
         auto *task=new ImageTask(resize);
-        connect(task,&ImageTask::completed,resize,[this,resize](const QImage &image,const QString &error) {
+        connect(task,&ImageTask::completed,resize,[this](const QImage &image,const QString &error) {
             if(!error.isEmpty()){preview_->setToolTip(error);return;}
             preview_->setImage(QPixmap::fromImage(image));
-            resize->findChild<QDialogButtonBox *>()->button(QDialogButtonBox::Ok)->setEnabled(true);
+            resizePreviewPending_=false;
+            updateButtons();
         });
         const auto refresh=[this,resize,source,task] {
             if(!ImageProcessor::validOutputSize(cv::Size(resize->targetSize().width(),resize->targetSize().height())))return;
             auto opt=draft_;const auto size=PreviewImage::boundedSize(resize->targetSize());
             opt.targetSize=cv::Size(size.width(),size.height());
-            resize->findChild<QDialogButtonBox *>()->button(QDialogButtonBox::Ok)->setEnabled(false);
+            resizePreviewPending_=true;
+            updateButtons();
             task->submit(source,opt);
         };
-        connect(resize,&ResizeDialog::targetSizeChanged,this,refresh);
+        connect(resize,&ResizePanel::targetSizeChanged,this,refresh);
         if(!reusePreview)refresh();
     }
-    if(mode_!=Resize)DialogAppearance::embed(panel_);
+    if(auto *dialog=qobject_cast<QDialog *>(panel_))DialogAppearance::embed(dialog);
     body_->addWidget(panel_);panel_->installEventFilter(this);
-    panel_->findChild<QDialogButtonBox *>()->button(QDialogButtonBox::Ok)->installEventFilter(this);
+    if(auto *box=panel_->findChild<QDialogButtonBox *>())
+        box->button(QDialogButtonBox::Ok)->installEventFilter(this);
     const auto changed=[this]{recordTimer_.start();updateButtons();};
     for(auto *spin:panel_->findChildren<QSpinBox *>())connect(spin,&QSpinBox::valueChanged,this,changed);
     for(auto *spin:panel_->findChildren<QDoubleSpinBox *>())connect(spin,&QDoubleSpinBox::valueChanged,this,changed);

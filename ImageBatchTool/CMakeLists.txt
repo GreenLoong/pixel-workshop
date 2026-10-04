@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.19)
 
 set(CMAKE_USER_MAKE_RULES_OVERRIDE_CXX "${CMAKE_CURRENT_SOURCE_DIR}/cmake/MSVCDependencies.cmake")
-project(ImageBatchTool VERSION 0.19.1 LANGUAGES CXX)
+project(ImageBatchTool VERSION 0.19.2 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -44,7 +44,7 @@ add_library(pixel_presentation STATIC
     src/presentation/dialogs/backgrounddialog.cpp src/presentation/dialogs/backgrounddialog.h
     src/presentation/dialogs/batchdialog.cpp src/presentation/dialogs/batchdialog.h
     src/presentation/dialogs/geometrydialog.cpp src/presentation/dialogs/geometrydialog.h
-    src/presentation/dialogs/resizedialog.cpp src/presentation/dialogs/resizedialog.h src/presentation/dialogs/resizedialog.ui
+    src/presentation/widgets/resizepanel.cpp src/presentation/widgets/resizepanel.h src/presentation/widgets/resizepanel.ui
     src/presentation/dialogs/tonedialog.cpp src/presentation/dialogs/tonedialog.h
     src/presentation/widgets/batchparameters.cpp src/presentation/widgets/batchparameters.h
     src/presentation/widgets/dialogappearance.cpp src/presentation/widgets/dialogappearance.h
