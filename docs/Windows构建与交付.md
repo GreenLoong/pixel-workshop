@@ -7,7 +7,7 @@
 ## 构建与使用
 
 1. 在 Qt Creator 打开 `ImageBatchTool/CMakeLists.txt`，选择 MSVC 64 位 Kit 和 Release。
-2. 设置 `OpenCV_DIR=D:/Tools/OpenCV/opencv/build`。日常开发可以关闭下面两个开关；交付构建设置 `IMAGEBATCHTOOL_BUILD_PACKAGE_CHECKS=ON`，使程序和 `PixelWorkshopCheck.exe` 一起生成，执行 CMake，然后构建。
+2. 设置 `OpenCV_DIR=<OpenCV 安装目录>/build`。日常开发可以关闭下面两个开关；交付构建设置 `IMAGEBATCHTOOL_BUILD_PACKAGE_CHECKS=ON`，使程序和 `PixelWorkshopCheck.exe` 一起生成，执行 CMake，然后构建。
 3. 本机生成文件为 `ImageBatchTool/build/release-clean/ImageBatchTool.exe`。运行依赖必须随程序提供，不能只复制 exe。
 4. 启动后打开图片，用“编辑图片”进入编辑页，顶部切换模式，点击“完成编辑”应用全部调整；取消返回主页且不修改主图。单张使用“另存为”。批量选择不同的输入、输出目录，开始后查看进度与结果表；取消等待当前图片运算结束，保留已完成输出。
 5. 更新构建后，已打开的旧进程不会自动切换版本。先保存需要保留的结果，关闭旧窗口，再运行新程序。
