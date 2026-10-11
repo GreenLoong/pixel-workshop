@@ -51,7 +51,7 @@ int main(int argc,char **argv) {
         p.processing.exposure=.5;p.processing.rotation=90;p.processing.crop=cv::Rect2d(.1,.1,.8,.8);
         p.processing.background=ImageProcessor::BackgroundMode::Replace;p.processing.backgroundColor=cv::Scalar(20,80,120);
         p.processing.strokes={ImageProcessor::BrushStroke{{{.2,.3},{.25,.35}},.03,false}};
-        const QString name="简历/灰度";BatchPresets::save(name,p);const auto loaded=BatchPresets::load(name);
+        const QString name="预设/灰度";BatchPresets::save(name,p);const auto loaded=BatchPresets::load(name);
         require(loaded.processing==p.processing && loaded.sizeMode==p.sizeMode && loaded.percent==50,"Preset round trip lost parameters");
         require(BatchPresets::names().contains(name),"Unicode slash name lost");
         BatchPresets::remove(name);require(!BatchPresets::names().contains(name),"Preset removal failed");
